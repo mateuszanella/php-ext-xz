@@ -113,8 +113,7 @@ PHP_FUNCTION(xzopen)
 }
 /* }}} */
 
-/* {{{ proto string xzencode(string str, ?int compression_level = 5)
-   Retuns the encoded string. */
+/* {{{ Retuns the encoded string. */
 PHP_FUNCTION(xzencode)
 {
 	uint8_t *in = NULL;
