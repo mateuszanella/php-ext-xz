@@ -101,7 +101,7 @@ PHP_FUNCTION(xzopen)
 	}
 
 	char *mode_to_pass = emalloc(mode_len + 32);
-	snprintf(mode_to_pass, mode_len + 32, "%s:%lu", mode, compression_level);
+	snprintf(mode_to_pass, mode_len + 32, "%s:%lld", mode, compression_level);
 
 	php_stream *stream = php_stream_xzopen(NULL, filename, mode_to_pass, 0, NULL, NULL STREAMS_CC);
 
