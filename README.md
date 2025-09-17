@@ -1,10 +1,19 @@
 # php-ext-xz
 
+## IMPORTANT NOTICE
+
+THIS REPOSITORY WAS ORIGINALLY FORKED FROM: https://github.com/codemasher/php-ext-xz
+
+The intent of this fork is to maintain and update the extension to better reflect the current PHP ecosystem.
+
+I believe i will try to make it as similar to what the zlib extension provides, doing some alterations:
+- make the xzopen and xzencode functions receive the compression level as a parameter, removing the global setting
+- adding a incremental compression/decompression API (similar to deflate_init/inflate_init)
+
+After theese are done, this library will be submitted to PECL and PIE.
+
 PHP Extension providing XZ (LZMA2) compression/decompression functions.<br/>
 (see [Implement lzma (xz?) compression](https://news-web.php.net/php.internals/106654))
-
-[![Linux build](https://github.com/codemasher/php-ext-xz/workflows/Linux/badge.svg)](https://github.com/codemasher/php-ext-xz/actions/workflows/linux.yml)
-[![Windows PHP8 build](https://github.com/codemasher/php-ext-xz/workflows/Windows/badge.svg)](https://github.com/codemasher/php-ext-xz/actions/workflows/windows.yml)
 
 ## Build & Installation
 
@@ -26,37 +35,6 @@ sudo make install
 ```
 
 Do not forget to add `extension=xz.so` to your `php.ini`.
-
-### Windows
-Windows builds are now done automatically on each push; you can download them from the [build artifacts](https://docs.github.com/en/actions/managing-workflow-runs/downloading-workflow-artifacts) or [releases](https://github.com/codemasher/php-ext-xz/releases) (after 1.1.2).
-
-If you want to build it on your own, follow the steps under "[Build your own PHP on Windows](https://wiki.php.net/internals/windows/stepbystepbuild_sdk_2)" to setup your build environment.
-Before the compilation step, clone this repository to `[...]\php-src\ext\xz` and proceed.
-
-```bat
-git clone https://github.com/Microsoft/php-sdk-binary-tools.git c:\php-sdk
-cd c:\php-sdk
-phpsdk-vs16-x64.bat
-```
-Run the buildtree script and check out the php source:
-```bat
-phpsdk_buildtree php-8.0
-git clone https://github.com/php/php-src.git
-cd php-src
-git checkout PHP-8.0
-```
-Clone the xz extension and run the build:
-```bat
-git clone https://github.com/codemasher/php-ext-xz .\ext\xz
-phpsdk_deps -u
-buildconf --force
-configure --enable-xz
-nmake snap
-```
-
-Please note that the `liblzma` dependency is not included with PHP < 8, so you will need to [download it manually](https://windows.php.net/downloads/php-sdk/deps/vs16/x64/liblzma-5.2.5-vs16-x64.zip) and extract it into the `deps` directory.
-
-Copy the `php_xz.dll` into the `/ext` directory of your PHP installation and add the line `extension=xz` to your `php.ini` or in case of the versioned .dll from the artifacts something like: `extension=xz-0eebbf2-8.2-ts-vs16-x64` - omit the `php_` and `.dll`.
 
 ## Basic usage
 
