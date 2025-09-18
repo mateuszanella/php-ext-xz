@@ -1,19 +1,6 @@
 # php-ext-xz
 
-## IMPORTANT NOTICE
-
-THIS REPOSITORY WAS ORIGINALLY FORKED FROM: https://github.com/codemasher/php-ext-xz
-
-The intent of this fork is to maintain and update the extension to better reflect the current PHP ecosystem.
-
-I believe i will try to make it as similar to what the zlib extension provides, doing some alterations:
-- make the xzopen and xzencode functions receive the compression level as a parameter, removing the global setting
-- adding a incremental compression/decompression API (similar to deflate_init/inflate_init)
-
-After theese are done, this library will be submitted to PECL and PIE.
-
-PHP Extension providing XZ (LZMA2) compression/decompression functions.<br/>
-(see [Implement lzma (xz?) compression](https://news-web.php.net/php.internals/106654))
+PHP Extension providing XZ (LZMA2) compression/decompression functions.
 
 ## Build & Installation
 
@@ -55,5 +42,8 @@ $encoded = xzencode($str);
 $decoded = xzdecode($encoded);
 ```
 
-## Disclaimer
-May or may not contain bugs. Use at your own risk.
+## Credits
+
+This repository is a fork from [php-ext-xz by codemasher](https://github.com/codemasher/php-ext-xz), originally forked from the [RFC](https://news-web.php.net/php.internals/106654).
+
+You can see the full list of contributors [here](https://github.com/mateuszanella/php-ext-xz/graphs/contributors).
