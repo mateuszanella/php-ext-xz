@@ -2,7 +2,7 @@
 
 on:
   - pull_request
-  # - push
+  - push
 
 name: "Linux"
 
