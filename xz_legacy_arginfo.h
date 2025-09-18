@@ -34,7 +34,7 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_xzopen, 0, 0, 2)
 	ZEND_ARG_INFO(0, compression_level)
 ZEND_END_ARG_INFO()
 
-static const zend_function_entry xz_functions[] = {
+static const zend_function_entry ext_functions[] = {
 	PHP_FE(xzdecode, arginfo_xzdecode)
 	PHP_FE(xzopen, arginfo_xzopen)
 	PHP_FE(xzencode, arginfo_xzencode)
