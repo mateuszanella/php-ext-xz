@@ -1,6 +1,6 @@
 {
 	"$schema": "https://getcomposer.org/schema.json",
-	"name": "codemasher/php-ext-xz",
+	"name": "mateuszanella/php-ext-xz",
 	"description": "A PHP Extension providing xz (LZMA2) compression/decompression via PHP streams.",
 	"keywords": ["php-extension", "xz", "lzma2"],
 	"license": "PHP-3.01",
@@ -20,22 +20,21 @@
 		{
 			"name": "smiley",
 			"email": "smiley@chillerlan.net",
-			"homepage": "https://github.com/codemasher"
+			"homepage": "https://github.com/codemasher/php-ext-xz"
+		},
+		{
+			"name": "mateuszanella",
+			"email": "mateusblk1@gmail.com",
+			"homepage": "https://github.com/mateuszanella"
 		},
 		{
 			"name": "Contributors",
-			"homepage":"https://github.com/codemasher/php-ext-xz/graphs/contributors"
+			"homepage":"https://github.com/mateuszanella/php-ext-xz/graphs/contributors"
 		}
 	],
-	"funding": [
-		{
-			"type": "Ko-Fi",
-			"url": "https://ko-fi.com/codemasher"
-		}
-	],
-	"homepage": "https://github.com/codemasher/php-ext-xz",
+	"homepage": "https://github.com/mateuszanella/php-ext-xz",
 	"support": {
-		"issues": "https://github.com/codemasher/php-ext-xz/issues",
-		"source": "https://github.com/codemasher/php-ext-xz"
+		"issues": "https://github.com/mateuszanella/php-ext-xz/issues",
+		"source": "https://github.com/mateuszanella/php-ext-xz"
 	}
 }
