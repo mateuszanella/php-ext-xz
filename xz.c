@@ -23,12 +23,18 @@
 # include "config.h"
 #endif
 
-#include "php.h"
-#include "php_ini.h"
 #include "ext/standard/file.h"
 #include "ext/standard/info.h"
-#include "utils.h"
+#include "php.h"
+#include "php_ini.h"
 #include "php_xz.h"
+#include "utils.h"
+
+#if PHP_VERSION_ID >= 80000
+# include "xz_arginfo.h"
+#else
+# include "xz_legacy_arginfo.h"
+#endif
 
 /* For compatibility with older PHP versions */
 #ifndef ZEND_PARSE_PARAMETERS_NONE
@@ -36,69 +42,6 @@
 	ZEND_PARSE_PARAMETERS_START(0, 0) \
 	ZEND_PARSE_PARAMETERS_END()
 #endif
-
-/* {{{ arginfo */
-ZEND_BEGIN_ARG_INFO(arginfo_xzread, 0)
-	ZEND_ARG_INFO(0, fp)
-	ZEND_ARG_INFO(0, length)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_INFO_EX(arginfo_xzwrite, 0, 0, 2)
-	ZEND_ARG_INFO(0, fp)
-	ZEND_ARG_INFO(0, str)
-	ZEND_ARG_INFO(0, length)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_INFO(arginfo_xzclose, 0)
-	ZEND_ARG_INFO(0, fp)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_INFO(arginfo_xzpassthru, 0)
-	ZEND_ARG_INFO(0, fp)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_INFO(arginfo_xzencode, 0)
-	ZEND_ARG_INFO(0, str)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_INFO(arginfo_xzdecode, 0)
-	ZEND_ARG_INFO(0, str)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_INFO_EX(arginfo_xzopen, 0, 0, 2)
-	ZEND_ARG_INFO(0, filename)
-	ZEND_ARG_INFO(0, mode)
-	ZEND_ARG_INFO(0, compression_level)
-ZEND_END_ARG_INFO()
-/* }}} */
-
-/* {{{ xz_functions[] */
-static const zend_function_entry xz_functions[] = {
-	PHP_FE(xzdecode, arginfo_xzdecode)
-	PHP_FE(xzopen, arginfo_xzopen)
-	PHP_FE(xzencode, arginfo_xzencode)
-	PHP_FALIAS(xzread, fread, arginfo_xzread)
-	PHP_FALIAS(xzwrite, fwrite, arginfo_xzwrite)
-	PHP_FALIAS(xzclose, fclose, arginfo_xzclose)
-	PHP_FALIAS(xzpassthru, fpassthru, arginfo_xzpassthru)
-	PHP_FE_END
-};
-/* }}} */
-
-/* {{{ xz_module_entry */
-zend_module_entry xz_module_entry = {
-	STANDARD_MODULE_HEADER,
-	"xz",
-	xz_functions,
-	PHP_MINIT(xz),
-	PHP_MSHUTDOWN(xz),
-	NULL, /* PHP_RINIT(xz) */
-	NULL, /* PHP_RSHUTDOWN(xz) */
-	PHP_MINFO(xz),
-	PHP_XZ_VERSION,
-	STANDARD_MODULE_PROPERTIES
-};
-/* }}} */
 
 /* {{{ INI entries. */
 PHP_INI_BEGIN()
@@ -330,18 +273,24 @@ PHP_FUNCTION(xzdecode)
 }
 /* }}} */
 
+/* {{{ xz_module_entry */
+zend_module_entry xz_module_entry = {
+    STANDARD_MODULE_HEADER,
+    "xz",
+    ext_functions,
+    PHP_MINIT(xz),
+    PHP_MSHUTDOWN(xz),
+    NULL, /* PHP_RINIT(xz) */
+    NULL, /* PHP_RSHUTDOWN(xz) */
+    PHP_MINFO(xz),
+    PHP_XZ_VERSION,
+    STANDARD_MODULE_PROPERTIES
+};
+/* }}} */
+
 #ifdef COMPILE_DL_XZ
 #ifdef ZTS
     ZEND_TSRMLS_CACHE_DEFINE();
 #endif
 ZEND_GET_MODULE(xz)
 #endif
-
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * End:
- * vim600: sw=4 ts=4 fdm=marker
- * vim<600: sw=4 ts=4
- */
