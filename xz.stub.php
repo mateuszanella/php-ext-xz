@@ -1,6 +1,7 @@
 <?php
 
 /**
+ * @generate-legacy-arginfo 80000
  * @generate-class-entries
  * @undocumentable
  */

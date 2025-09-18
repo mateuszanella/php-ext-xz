@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 27969aaea1f5083f25f46da3cd983406c4c04996 */
+ * Stub hash: 6993ab59c2efdc11093f1a01a0be62eb8a6102fe */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_MASK_EX(arginfo_xzread, 0, 1, MAY_BE_STRING|MAY_BE_FALSE)
 	ZEND_ARG_OBJ_INFO(0, fp, resource, 0)
@@ -41,10 +41,26 @@ ZEND_FUNCTION(xzdecode);
 ZEND_FUNCTION(xzopen);
 
 static const zend_function_entry ext_functions[] = {
+#if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY("xzread", zif_fread, arginfo_xzread, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY("xzread", zif_fread, arginfo_xzread, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY("xzwrite", zif_fwrite, arginfo_xzwrite, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY("xzwrite", zif_fwrite, arginfo_xzwrite, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY("xzclose", zif_fclose, arginfo_xzclose, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY("xzclose", zif_fclose, arginfo_xzclose, 0)
+#endif
+#if (PHP_VERSION_ID >= 80400)
 	ZEND_RAW_FENTRY("xzpassthru", zif_fpassthru, arginfo_xzpassthru, 0, NULL, NULL)
+#else
+	ZEND_RAW_FENTRY("xzpassthru", zif_fpassthru, arginfo_xzpassthru, 0)
+#endif
 	ZEND_FE(xzencode, arginfo_xzencode)
 	ZEND_FE(xzdecode, arginfo_xzdecode)
 	ZEND_FE(xzopen, arginfo_xzopen)
