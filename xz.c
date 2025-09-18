@@ -29,7 +29,12 @@
 #include "php_ini.h"
 #include "php_xz.h"
 #include "utils.h"
-#include "xz_arginfo.h"
+
+#if PHP_VERSION_ID >= 80000
+# include "xz_arginfo.h"
+#else
+# include "xz_legacy_arginfo.h"
+#endif
 
 /* For compatibility with older PHP versions */
 #ifndef ZEND_PARSE_PARAMETERS_NONE
