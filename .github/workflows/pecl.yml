@@ -1,0 +1,113 @@
+name: Install with PECL
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    tags-ignore:
+      - '**'
+  pull_request:
+    branches:
+      - main
+      - dev
+
+jobs:
+  pecl:
+    name: PECL (PHP ${{ matrix.php-version }} on ${{ matrix.os-version }})
+    runs-on: ubuntu-latest
+    container:
+      image: php:${{ matrix.php-version }}-cli-${{ matrix.os-version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          -
+            php-version: '7.1'
+            os-version: alpine3.9
+            prepare-command: apk add --no-cache $PHPIZE_DEPS xz-dev
+            cleanup-command: apk del $PHPIZE_DEPS xz-dev
+          -
+            php-version: '7.4'
+            os-version: alpine3.10
+            prepare-command: apk add --no-cache $PHPIZE_DEPS xz-dev
+            cleanup-command: apk del $PHPIZE_DEPS xz-dev
+          -
+            php-version: '8.0'
+            os-version: alpine3.16
+            prepare-command: apk add --no-cache $PHPIZE_DEPS xz-dev
+            cleanup-command: apk del $PHPIZE_DEPS xz-dev
+          -
+            php-version: '8.4'
+            os-version: alpine3.22
+            prepare-command: apk add --no-cache $PHPIZE_DEPS xz-dev
+            cleanup-command: apk del $PHPIZE_DEPS xz-dev
+          -
+            php-version: '7.1'
+            os-version: buster
+            prepare-command: apt-get update && apt-get install -qy liblzma-dev
+            cleanup-command: apt-get remove --purge -qy liblzma-dev
+            fix-apt: true
+          -
+            php-version: '7.4'
+            os-version: buster
+            prepare-command: apt-get update && apt-get install -qy liblzma-dev
+            cleanup-command: apt-get remove --purge -qy liblzma-dev
+            fix-apt: true
+          -
+            php-version: '8.0'
+            os-version:  bullseye
+            prepare-command: apt-get update && apt-get install -qy liblzma-dev
+            cleanup-command: apt-get remove --purge -qy liblzma-dev
+          -
+            php-version: '8.4'
+            os-version:  trixie
+            prepare-command: apt-get update && apt-get install -qy liblzma-dev
+            cleanup-command: apt-get remove --purge -qy liblzma-dev
+    steps:
+      -
+        name: Fix apt
+        if: matrix.fix-apt
+        env:
+          DEB_ARCHIVE: http://archive.debian.org/debian-archive
+          DEB_ARCHIVE_SECURITY: http://archive.debian.org/debian-archive/debian-security
+        run: |
+          echo '# Original /etc/apt/sources.list'
+          cat /etc/apt/sources.list | grep -v '^#'
+          . /etc/os-release
+          sed -ri "s;^(\s*deb\s+http://(httpredir|deb).debian.org/debian\s+$VERSION_CODENAME-updates\b.*);#\1;" /etc/apt/sources.list
+          sed -ri "s;^(\s*deb\s+)http://(httpredir|deb).debian.org;\1$DEB_ARCHIVE;" /etc/apt/sources.list
+          sed -ri "s;^(\s*deb\s+)http://security.debian.org/debian-security;\1$DEB_ARCHIVE_SECURITY;" /etc/apt/sources.list
+          sed -ri "s;^(\s*deb\s+)http://security.debian.org;\1$DEB_ARCHIVE_SECURITY;" /etc/apt/sources.list
+          echo '# Patched /etc/apt/sources.list'
+          cat /etc/apt/sources.list | grep -v '^#'
+      -
+        name: Prepare environment
+        if: matrix.prepare-command
+        run: ${{ matrix.prepare-command }}
+      - 
+        name: Checkout repository
+        uses: actions/checkout@v4
+      - 
+        name: Check package.xml
+        uses: pecl package-validate
+      -
+        name: Create PECL package
+        run: |
+          pecl package
+          mv xz-*.tgz /tmp/xz.tgz
+      -
+        name: Install PECL package
+        working-directory: /tmp
+        run: |
+          pecl install ./xz.tgz
+      -
+        name: Cleanup environment
+        if: matrix.cleanup-command
+        run: ${{ matrix.cleanup-command }}
+      -
+        name: Enable extension
+        run: docker-php-ext-enable xz
+      -
+        name: Inspect extension
+        run: php --ri ip2location
