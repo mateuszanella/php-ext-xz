@@ -2,12 +2,19 @@
 	"$schema": "https://getcomposer.org/schema.json",
 	"name": "mateuszanella/php-ext-xz",
 	"description": "A PHP Extension providing xz (LZMA2) compression/decompression via PHP streams.",
-	"keywords": ["php-extension", "xz", "lzma2"],
+	"keywords": [
+		"php-extension",
+		"xz",
+		"lzma2"
+	],
 	"license": "PHP-3.01",
 	"type": "php-ext",
 	"php-ext": {
 		"extension-name": "xz",
 		"priority": 99
+	},
+	"require": {
+		"php": ">=7.0"
 	},
 	"authors": [
 		{
@@ -29,7 +36,7 @@
 		},
 		{
 			"name": "Contributors",
-			"homepage":"https://github.com/mateuszanella/php-ext-xz/graphs/contributors"
+			"homepage": "https://github.com/mateuszanella/php-ext-xz/graphs/contributors"
 		}
 	],
 	"homepage": "https://github.com/mateuszanella/php-ext-xz",
