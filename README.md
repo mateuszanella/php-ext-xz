@@ -11,7 +11,7 @@ pie install mateuszanella/php-ext-xz
 ```
 
 This will download the source and compile the extension for your current PHP version. After installing the module, you may need to enable it in your `php.ini` file.
-
+****
 ## Configuration
 
 ### php.ini
@@ -60,31 +60,16 @@ The extension also supports stream-based operations for working with `.xz` files
 
 ```php
 $file = '/tmp/test.xz';
-$dataToWrite = 'Data you would like compressed and written to a file. This can be a very long string.';
 
 // Writing to an .xz file
 $wh = xzopen($file, 'w');
-if ($wh) {
-    xzwrite($wh, $dataToWrite);
-    xzclose($wh);
-    echo "Successfully wrote to $file\n";
-} else {
-    die("Failed to open $file for writing.");
-}
+xzwrite($wh, 'Data to write');
+xzclose($wh);
 
-// Reading from an .xz file
+// Reading from an .xz file and outputting its contents
 $rh = xzopen($file, 'r');
-if ($rh) {
-    echo "Reading from $file:\n";
-    // xzpassthru outputs the data directly to the output buffer
-    xzpassthru($rh);
-    xzclose($rh);
-} else {
-    die("Failed to open $file for reading.");
-}
-
-// Clean up
-unlink($file);
+xzpassthru($rh);
+xzclose($rh);
 ```
 
 ## Credits
