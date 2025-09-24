@@ -31,7 +31,7 @@ You can also configure the default compression level and memory limit:
 xz.compression_level=5
 
 ; The maximum amount of memory that can be used when decompressing. Default is 0 (no limit).
-xz.decode_memory_limit=65536
+xz.max_memory=65536
 ```
 
 ## Build from Source
