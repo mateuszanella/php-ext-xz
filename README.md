@@ -38,52 +38,6 @@ xz.decode_memory_limit=65536
 
 For detailed build and installation instructions from source, please see [docs/BUILD.md](docs/BUILD.md).
 
-## Functions
-
-### `string xzencode(string $data, int $preset = 6)`
-
-Compresses a string using XZ compression.
-
-- `$data`: The string to be compressed.
-- `$preset`: Compression preset level. Can range from 0 to 9. If not provided, the value from `xz.compression_level` in `php.ini` will be used.
-
-### `string xzdecode(string $data, int $memory_limit = 100000000)`
-
-Decompresses a string that was compressed using XZ compression.
-
-- `$data`: The string to be decompressed.
-- `$memory_limit`: The maximum amount of memory to be used for decompression. If not provided, the value from `xz.decode_memory_limit` in `php.ini` will be used.
-
-### `resource|false xzopen(string $path, string $mode)`
-
-Opens an XZ-compressed file.
-
-- `$path`: The path to the file.
-- `$mode`: The mode in which to open the file (`'r'` for reading, `'w'` for writing).
-
-Returns a file handle resource on success, or `false` on failure.
-
-### `int xzwrite(resource $stream, string $data)`
-
-Writes to an open XZ file handle.
-
-- `$stream`: The file handle resource from `xzopen()`.
-- `$data`: The string to be written.
-
-Returns the number of bytes written.
-
-### `void xzclose(resource $stream)`
-
-Closes an open XZ file handle.
-
-- `$stream`: The file handle resource to close.
-
-### `void xzpassthru(resource $stream)`
-
-Outputs all remaining data from an XZ file handle.
-
-- `$stream`: The file handle resource.
-
 ## Basic usage
 
 ### String-based operations
@@ -93,20 +47,11 @@ You can easily compress and decompress strings.
 ```php
 $originalString = 'This is a test string that will be compressed and then decompressed.';
 
-// Compress the string with default compression level (6)
+// Compress a string
 $compressed = xzencode($originalString);
 
-echo "Original size: " . strlen($originalString) . " bytes\n";
-echo "Compressed size: ". strlen($compressed) . " bytes\n";
-
-// Decompress the string
+// Decompress a string
 $decompressed = xzdecode($compressed);
-
-assert($originalString === $decompressed);
-
-// Using a higher compression level (e.g., 9) for better compression ratio
-$compressed_high = xzencode($originalString, 9);
-echo "Compressed size (level 9): ". strlen($compressed_high) . " bytes\n";
 ```
 
 ### File-based operations
@@ -138,7 +83,7 @@ if ($rh) {
     die("Failed to open $file for reading.");
 }
 
-// Clean up the file
+// Clean up
 unlink($file);
 ```
 
