@@ -138,7 +138,7 @@ PHP_FUNCTION(xzencode)
         zend_argument_value_error(2, "must be between 0 and 9");
         RETURN_THROWS();
 #else
-		zend_throw_error(zend_type_error, "xzencode(): Argument #2 ($compression_level) must be between 0 and 9");
+        php_error_docref(NULL, E_WARNING, "compression level must be between 0 and 9");
         RETURN_BOOL(0);
 #endif
 	}
