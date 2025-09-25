@@ -28,13 +28,15 @@ $bad_level = -99;
 var_dump(xzencode($data, $bad_level));
 
 ?>
---EXPECT--
+--EXPECTF--
 *** Testing xzencode() : error conditions ***
 
 -- Testing with larger than 9 compression level --
+
 Warning: xzencode(): compression level must be between 0 and 9 in %s on line %d
 bool(false)
 
 -- Testing with lower than 0 compression level --
+
 Warning: xzencode(): compression level must be between 0 and 9 in %s on line %d
 bool(false)
