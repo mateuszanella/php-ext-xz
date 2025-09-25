@@ -2,44 +2,74 @@
 
 PHP Extension providing XZ (LZMA2) compression/decompression functions.
 
-## Build & Installation
+## Installation
 
-### Linux
+The recommended way to install the extension is using [pie](https://www.php.net/manual/en/install.pie.intro.php):
 
-This module requires [`liblzma-dev`](https://packages.ubuntu.com/search?lang=de&keywords=liblzma-dev&searchon=names) (https://tukaani.org/xz/) as well as php7-dev or php8-dev.
-If you are using Ubuntu, you can easily install all of them by typing the following command in your terminal:
 ```bash
-sudo apt-get install git php7.4-dev liblzma-dev
-```
-To build and install as module, perform the following steps:
-```bash
-git clone https://github.com/codemasher/php-ext-xz.git
-cd php-ext-xz
-phpize
-./configure
-make
-sudo make install
+pie install mateuszanella/php-ext-xz
 ```
 
-Do not forget to add `extension=xz.so` to your `php.ini`.
+This will download the source and compile the extension for your current PHP version. After installing the module, you may need to enable it in your `php.ini` file.
+****
+## Configuration
+
+### php.ini
+
+Add the following line to your `php.ini` configuration file:
+
+```ini
+extension=xz.so
+```
+
+You can also configure the default compression level and memory limit:
+
+```ini
+
+; Default compression level. Affects `xzencode` and `xzopen`, 
+; but only when the level was not specified. Default is 5.
+xz.compression_level=5
+
+; The maximum amount of memory that can be used when decompressing. Default is 0 (no limit).
+xz.max_memory=65536
+```
+
+## Build from Source
+
+For detailed build and installation instructions from source, please see [docs/BUILD.md](docs/BUILD.md).
 
 ## Basic usage
 
-```php
-$fh = xzopen('/tmp/test.xz', 'w');
-xzwrite($fh, 'Data you would like compressed and written.');
-xzclose($fh);
+### String-based operations
 
-$fh = xzopen('/tmp/test.xz', 'r');
-xzpassthru($fh);
-xzclose($fh);
+You can easily compress and decompress strings.
+
+```php
+$originalString = 'This is a test string that will be compressed and then decompressed.';
+
+// Compress a string
+$compressed = xzencode($originalString);
+
+// Decompress a string
+$decompressed = xzdecode($compressed);
 ```
 
-```php
-$str = 'Data you would like compressed.';
+### File-based operations
 
-$encoded = xzencode($str);
-$decoded = xzdecode($encoded);
+The extension also supports stream-based operations for working with `.xz` files.
+
+```php
+$file = '/tmp/test.xz';
+
+// Writing to an .xz file
+$wh = xzopen($file, 'w');
+xzwrite($wh, 'Data to write');
+xzclose($wh);
+
+// Reading from an .xz file and outputting its contents
+$rh = xzopen($file, 'r');
+xzpassthru($rh);
+xzclose($rh);
 ```
 
 ## Credits
