@@ -134,8 +134,13 @@ PHP_FUNCTION(xzencode)
 	}
 
 	if (compression_level < 0 || compression_level > 9) {
-		zend_argument_value_error(2, "must be between 0 and 9");
-		RETURN_THROWS();
+#if PHP_VERSION_ID >= 80000
+        zend_argument_value_error(2, "must be between 0 and 9");
+        RETURN_THROWS();
+#else
+        php_error_docref(NULL, E_WARNING, "compression level must be between 0 and 9");
+        RETURN_BOOL(0);
+#endif
 	}
 
 	/* The output string (encoded). */
