@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 1058427ba1309be48cfa9340fd7f4052238269b2 */
+ * Stub hash: 66a217b3ff195bfd290132e29a53db417487c8db */
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_xzread, 0, 0, 1)
 	ZEND_ARG_INFO(0, fp)
@@ -20,9 +20,12 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_xzencode, 0, 0, 1)
 	ZEND_ARG_INFO(0, str)
+	ZEND_ARG_INFO(0, compression_level)
 ZEND_END_ARG_INFO()
 
-#define arginfo_xzdecode arginfo_xzencode
+ZEND_BEGIN_ARG_INFO_EX(arginfo_xzdecode, 0, 0, 1)
+	ZEND_ARG_INFO(0, str)
+ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_xzopen, 0, 0, 2)
 	ZEND_ARG_INFO(0, filename)

@@ -127,8 +127,20 @@ PHP_FUNCTION(xzencode)
 	/* The length of the string to be encoded */
 	size_t in_len = 0;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "s", &in, &in_len) == FAILURE) {
+	zend_long compression_level = INI_INT("xz.compression_level");
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "s|l", &in, &in_len, &compression_level) == FAILURE) {
 		return;
+	}
+
+	if (compression_level < 0 || compression_level > 9) {
+#if PHP_VERSION_ID >= 80000
+        zend_argument_value_error(2, "must be between 0 and 9");
+        RETURN_THROWS();
+#else
+        php_error_docref(NULL, E_WARNING, "compression level must be between 0 and 9");
+        RETURN_BOOL(0);
+#endif
 	}
 
 	/* The output string (encoded). */
@@ -140,7 +152,7 @@ PHP_FUNCTION(xzencode)
 	uint8_t buff[XZ_BUFFER_SIZE];
 
 	lzma_options_lzma opt_lzma2;
-	if (lzma_lzma_preset(&opt_lzma2, INI_INT("xz.compression_level"))) {
+	if (lzma_lzma_preset(&opt_lzma2, compression_level)) {
 		RETURN_BOOL(0);
 	}
 
