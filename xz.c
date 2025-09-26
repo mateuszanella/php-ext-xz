@@ -127,7 +127,7 @@ PHP_FUNCTION(xzencode)
 	/* The length of the string to be encoded */
 	size_t in_len = 0;
 
-	zend_long compression_level = INI_INT("xz.compression_level");;
+	zend_long compression_level = INI_INT("xz.compression_level");
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "s|l", &in, &in_len, &compression_level) == FAILURE) {
 		return;
