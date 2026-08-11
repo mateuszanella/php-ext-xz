@@ -11,6 +11,8 @@
 #include "php_xz.h"
 #include "xz_encode.h"
 #include "xz_decode.h"
+#include "xz_compat.h"
+#include "xz_fopen_wrapper.h"
 
 #if PHP_VERSION_ID >= 80000
 # include "xz_arginfo.h"
@@ -65,13 +67,16 @@ PHP_MINFO_FUNCTION(xz)
    Opens a file stream. */
 PHP_FUNCTION(xzopen)
 {
-	char *filename = NULL, *mode = NULL;
-	size_t filename_len = 0, mode_len = 0;
+	char *filename, *mode;
+	size_t filename_len, mode_len;
 	zend_long compression_level = (zend_long)zend_ini_long_literal("xz.compression_level");
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "ss|l", &filename, &filename_len, &mode, &mode_len, &compression_level) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(2, 3)
+		Z_PARAM_STRING(filename, filename_len)
+		Z_PARAM_STRING(mode, mode_len)
+		Z_PARAM_OPTIONAL
+		Z_PARAM_LONG(compression_level)
+	ZEND_PARSE_PARAMETERS_END();
 
 	char *mode_to_pass = emalloc(mode_len + 32);
 	snprintf(mode_to_pass, mode_len + 32, "%s:" ZEND_LONG_FMT, mode, compression_level);
@@ -92,13 +97,15 @@ PHP_FUNCTION(xzopen)
    Returns the encoded string. */
 PHP_FUNCTION(xzencode)
 {
-	uint8_t *in = NULL;
-	size_t in_len = 0;
+	char *in;
+	size_t in_len;
 	zend_long compression_level = (zend_long)zend_ini_long_literal("xz.compression_level");
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "s|l", &in, &in_len, &compression_level) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 2)
+		Z_PARAM_STRING(in, in_len)
+		Z_PARAM_OPTIONAL
+		Z_PARAM_LONG(compression_level)
+	ZEND_PARSE_PARAMETERS_END();
 
 	if (compression_level < 0 || compression_level > 9) {
 #if PHP_VERSION_ID >= 80000
@@ -110,7 +117,7 @@ PHP_FUNCTION(xzencode)
 #endif
 	}
 
-	zend_string *out = php_xz_encode_string(in, in_len, (uint32_t)compression_level);
+	zend_string *out = php_xz_encode_string((const uint8_t *)in, in_len, (uint32_t)compression_level);
 
 	if (!out) {
 		RETURN_FALSE;
@@ -124,12 +131,12 @@ PHP_FUNCTION(xzencode)
    Returns the decoded string. */
 PHP_FUNCTION(xzdecode)
 {
-	uint8_t *in = NULL;
-	size_t in_len = 0;
+	char *in;
+	size_t in_len;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "s", &in, &in_len) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_STRING(in, in_len)
+	ZEND_PARSE_PARAMETERS_END();
 
 	if (!in_len) {
 		RETURN_FALSE;
@@ -137,7 +144,7 @@ PHP_FUNCTION(xzdecode)
 
 	uint64_t memory_limit = (uint64_t)zend_ini_long_literal("xz.max_memory");
 
-	zend_string *out = php_xz_decode_string(in, in_len, memory_limit);
+	zend_string *out = php_xz_decode_string((const uint8_t *)in, in_len, memory_limit);
 
 	if (!out) {
 		RETURN_FALSE;

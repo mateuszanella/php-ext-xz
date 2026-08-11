@@ -6,137 +6,108 @@
 #include "php_xz.h"
 #include "xz_encode.h"
 #include "xz_decode.h"
+#include "xz_compat.h"
+#include "xz_fopen_wrapper.h"
 
-/* {{{ php_xz_stream_data_t */
-struct php_xz_stream_data_t {
+struct php_xz_stream_ctx {
 	lzma_stream strm;
-	size_t in_buf_sz;
-	size_t out_buf_sz;
-	uint8_t *in_buf;
-	uint8_t *out_buf;
-	uint8_t *out_buf_idx;
+	uint8_t    *in_buf;
+	uint8_t    *out_buf;
+	uint8_t    *out_buf_idx;
 	php_stream *stream;
-	int fd;
-	char mode[64];
-	unsigned long level;
-	uint64_t memory;
+	bool        is_write;
 };
-/* }}} */
 
-/* {{{ php_xz_decompress */
-static int php_xz_decompress(struct php_xz_stream_data_t *self)
+static int php_xz_decompress(struct php_xz_stream_ctx *self)
 {
 	lzma_stream *strm = &self->strm;
-	lzma_action action = LZMA_RUN;
 
 	if (strm->avail_in == 0 && !php_stream_eof(self->stream)) {
-#if PHP_VERSION_ID >= 70400
-		ssize_t read = php_stream_read(self->stream, (char *)self->in_buf, self->in_buf_sz);
+		ssize_t read = php_stream_read(self->stream, (char *)self->in_buf, XZ_BUFFER_SIZE);
 		if (read < 0) {
 			return -1;
 		}
 		strm->avail_in = read;
-#else
-		strm->avail_in = php_stream_read(self->stream, (char *)self->in_buf, self->in_buf_sz);
-#endif
 		strm->next_in = self->in_buf;
 	}
 
-	lzma_ret ret = lzma_code(strm, action);
+	lzma_ret ret = lzma_code(strm, LZMA_RUN);
 	if (ret != LZMA_OK && ret != LZMA_STREAM_END) {
 		return -1;
 	}
 
 	return 0;
 }
-/* }}} */
 
-/* {{{ php_xz_compress */
-static int php_xz_compress(struct php_xz_stream_data_t *self)
+static int php_xz_compress(struct php_xz_stream_ctx *self)
 {
 	lzma_stream *strm = &self->strm;
-	lzma_action action = LZMA_RUN;
-	int to_write = strm->avail_in;
+	int to_write = (int)strm->avail_in;
 
 	while (strm->avail_in > 0) {
-		lzma_ret ret = lzma_code(strm, action);
-		size_t len = self->out_buf_sz - strm->avail_out;
+		lzma_ret ret = lzma_code(strm, LZMA_RUN);
+		size_t len = XZ_BUFFER_SIZE - strm->avail_out;
 		if (ret != LZMA_OK) {
 			to_write = -1;
 			break;
-		} else if (len) {
-			if (php_stream_write(self->stream, (char *)self->out_buf, len) != len) {
-				to_write = -1;
-				break;
-			}
+		}
+		if (len && php_stream_write(self->stream, (char *)self->out_buf, len) != (ssize_t)len) {
+			to_write = -1;
+			break;
 		}
 		strm->next_out = self->out_buf;
-		strm->avail_out = self->out_buf_sz;
+		strm->avail_out = XZ_BUFFER_SIZE;
 	}
 
 	strm->next_in = self->in_buf;
 
 	return to_write;
 }
-/* }}} */
 
-/* {{{ php_xz_init_decoder */
-static int php_xz_init_decoder(struct php_xz_stream_data_t *self)
+static int php_xz_init_decoder(struct php_xz_stream_ctx *self, uint64_t memory_limit)
 {
-	if (!php_xz_decoder_init_stream(&self->strm, self->memory)) {
+	if (!php_xz_decoder_init_stream(&self->strm, memory_limit)) {
 		return 0;
 	}
 
-	self->in_buf_sz = XZ_BUFFER_SIZE;
-	self->in_buf = emalloc(self->in_buf_sz);
+	self->in_buf = emalloc(XZ_BUFFER_SIZE);
 	self->strm.avail_in = 0;
 	self->strm.next_in = self->in_buf;
 
-	self->out_buf_sz = XZ_BUFFER_SIZE;
-	self->out_buf = emalloc(self->out_buf_sz);
+	self->out_buf = emalloc(XZ_BUFFER_SIZE);
 	self->out_buf_idx = self->out_buf;
-	self->strm.avail_out = self->out_buf_sz;
+	self->strm.avail_out = XZ_BUFFER_SIZE;
 	self->strm.next_out = self->out_buf;
 
 	return 1;
 }
-/* }}} */
 
-/* {{{ php_xz_init_encoder */
-static int php_xz_init_encoder(struct php_xz_stream_data_t *self)
+static int php_xz_init_encoder(struct php_xz_stream_ctx *self, uint32_t level)
 {
-	if (!php_xz_encoder_init_stream(&self->strm, self->level)) {
+	if (!php_xz_encoder_init_stream(&self->strm, level)) {
 		return 0;
 	}
 
-	self->in_buf_sz = XZ_BUFFER_SIZE;
-	self->in_buf = emalloc(self->in_buf_sz);
+	self->in_buf = emalloc(XZ_BUFFER_SIZE);
 	self->strm.avail_in = 0;
 	self->strm.next_in = self->in_buf;
 
-	self->out_buf_sz = XZ_BUFFER_SIZE;
-	self->out_buf = emalloc(self->out_buf_sz);
-	self->strm.avail_out = self->out_buf_sz;
+	self->out_buf = emalloc(XZ_BUFFER_SIZE);
+	self->strm.avail_out = XZ_BUFFER_SIZE;
 	self->strm.next_out = self->out_buf;
 
 	return 1;
 }
-/* }}} */
 
-/* {{{ php_xziop_read */
-#if PHP_VERSION_ID >= 70400
 static ssize_t php_xziop_read(php_stream *stream, char *buf, size_t count)
-#else
-static size_t php_xziop_read(php_stream *stream, char *buf, size_t count)
-#endif
 {
-	struct php_xz_stream_data_t *self = (struct php_xz_stream_data_t *) stream->abstract;
+	struct php_xz_stream_ctx *self = (struct php_xz_stream_ctx *) stream->abstract;
 	lzma_stream *strm = &self->strm;
 
 	size_t to_read = count, have_read = 0;
 
 	while (to_read > 0) {
-		if (to_read < strm->next_out - self->out_buf_idx) {
+		if (to_read < (size_t)(strm->next_out - self->out_buf_idx)) {
 			memcpy(buf + have_read, self->out_buf_idx, to_read);
 			self->out_buf_idx += to_read;
 			have_read += to_read;
@@ -149,9 +120,8 @@ static size_t php_xziop_read(php_stream *stream, char *buf, size_t count)
 			if (strm->avail_out) {
 				self->out_buf_idx = strm->next_out;
 			} else {
-				self->out_buf_idx = strm->next_out;
 				self->out_buf_idx = strm->next_out = self->out_buf;
-				strm->avail_out = self->out_buf_sz;
+				strm->avail_out = XZ_BUFFER_SIZE;
 			}
 		}
 
@@ -161,35 +131,28 @@ static size_t php_xziop_read(php_stream *stream, char *buf, size_t count)
 		}
 
 		if (php_xz_decompress(self) < 0) {
-#if PHP_VERSION_ID >= 70400
 			if (!have_read) {
 				return -1;
 			}
-#endif
 			break;
 		}
 	}
 
 	return have_read;
 }
-/* }}} */
 
-/* {{{ php_xziop_write */
-#if PHP_VERSION_ID >= 70400
 static ssize_t php_xziop_write(php_stream *stream, const char *buf, size_t count)
-#else
-static size_t php_xziop_write(php_stream *stream, const char *buf, size_t count)
-#endif
 {
-	struct php_xz_stream_data_t *self = (struct php_xz_stream_data_t *) stream->abstract;
-	size_t wrote = 0, bytes_consumed = 0;
+	struct php_xz_stream_ctx *self = (struct php_xz_stream_ctx *) stream->abstract;
+	size_t wrote = 0;
+	int bytes_consumed = 0;
 
 	lzma_stream *strm = &self->strm;
 
-	while (count - wrote > self->in_buf_sz - strm->avail_in) {
-		memcpy((char *)self->in_buf + strm->avail_in, buf + wrote, self->in_buf_sz - strm->avail_in);
-		wrote += self->in_buf_sz - strm->avail_in;
-		strm->avail_in = self->in_buf_sz;
+	while (count - wrote > XZ_BUFFER_SIZE - strm->avail_in) {
+		memcpy((char *)self->in_buf + strm->avail_in, buf + wrote, XZ_BUFFER_SIZE - strm->avail_in);
+		wrote += XZ_BUFFER_SIZE - strm->avail_in;
+		strm->avail_in = XZ_BUFFER_SIZE;
 		bytes_consumed = php_xz_compress(self);
 		if (bytes_consumed < 0) {
 			break;
@@ -201,36 +164,29 @@ static size_t php_xziop_write(php_stream *stream, const char *buf, size_t count)
 		strm->avail_in += count - wrote;
 	}
 
-#if PHP_VERSION_ID >= 70400
-	return (bytes_consumed < 0 ? -1 : count);
-#else
-	return (bytes_consumed < 0 ? 0 : count);
-#endif
+	return (bytes_consumed < 0 ? -1 : (ssize_t)count);
 }
-/* }}} */
 
-/* {{{ php_xziop_close */
 static int php_xziop_close(php_stream *stream, int close_handle)
 {
-	struct php_xz_stream_data_t *self = (struct php_xz_stream_data_t *) stream->abstract;
+	struct php_xz_stream_ctx *self = (struct php_xz_stream_ctx *) stream->abstract;
 	int ret = EOF;
 
 	lzma_stream *strm = &self->strm;
 
-	if (strcmp(self->mode, "w") == 0 || strcmp(self->mode, "wb") == 0) {
+	if (self->is_write) {
 		lzma_ret lz_ret;
 
 		do {
 			strm->next_out = self->out_buf;
-			strm->avail_out = self->out_buf_sz;
-			lzma_action action = LZMA_FINISH;
-			lz_ret = lzma_code(strm, action);
+			strm->avail_out = XZ_BUFFER_SIZE;
+			lz_ret = lzma_code(strm, LZMA_FINISH);
 
-			if (strm->avail_out < self->out_buf_sz) {
-				size_t write_size = self->out_buf_sz - strm->avail_out;
+			if (strm->avail_out < XZ_BUFFER_SIZE) {
+				size_t write_size = XZ_BUFFER_SIZE - strm->avail_out;
 				php_stream_write(self->stream, (char *)self->out_buf, write_size);
 				strm->next_out = self->out_buf;
-				strm->avail_out = self->out_buf_sz;
+				strm->avail_out = XZ_BUFFER_SIZE;
 			}
 
 		} while (lz_ret == LZMA_OK);
@@ -248,21 +204,17 @@ static int php_xziop_close(php_stream *stream, int close_handle)
 
 	return ret;
 }
-/* }}} */
 
-/* {{{ php_xziop_flush */
 static int php_xziop_flush(php_stream *stream)
 {
-	struct php_xz_stream_data_t *self = (struct php_xz_stream_data_t *) stream->abstract;
-	if (strcmp(self->mode, "w") == 0 || strcmp(self->mode, "wb") == 0) {
+	struct php_xz_stream_ctx *self = (struct php_xz_stream_ctx *) stream->abstract;
+	if (self->is_write) {
 		php_xz_compress(self);
 	}
 	php_stream_flush(self->stream);
 	return 0;
 }
-/* }}} */
 
-/* {{{ php_stream_xzio_ops */
 php_stream_ops php_stream_xzio_ops = {
 	php_xziop_write,
 	php_xziop_read,
@@ -274,9 +226,7 @@ php_stream_ops php_stream_xzio_ops = {
 	NULL,
 	NULL
 };
-/* }}} */
 
-/* {{{ php_stream_xzopen */
 php_stream *php_stream_xzopen(php_stream_wrapper *wrapper, const char *path, const char *mode_pass, int options, zend_string **opened_path, php_stream_context *context STREAMS_DC)
 {
 	char mode[64];
@@ -323,25 +273,22 @@ php_stream *php_stream_xzopen(php_stream_wrapper *wrapper, const char *path, con
 	if (innerstream) {
 		int fd;
 		if (php_stream_cast(innerstream, PHP_STREAM_AS_FD, (void **) &fd, REPORT_ERRORS) == SUCCESS) {
-			struct php_xz_stream_data_t *self = ecalloc(1, sizeof(struct php_xz_stream_data_t));
+			struct php_xz_stream_ctx *self = ecalloc(1, sizeof(struct php_xz_stream_ctx));
 			self->stream = innerstream;
-			self->fd = fd;
-			self->level = level;
-			self->memory = mem;
-			strncpy(self->mode, mode, sizeof(self->mode));
+			self->is_write = (mode[0] == 'w');
 			stream = php_stream_alloc_rel(&php_stream_xzio_ops, self, 0, mode);
 
 			if (stream) {
 				stream->flags |= PHP_STREAM_FLAG_NO_BUFFER;
 				if ((strcmp(mode, "w") == 0) || (strcmp(mode, "wb") == 0)) {
-					if (!php_xz_init_encoder(self)) {
+					if (!php_xz_init_encoder(self, (uint32_t)level)) {
 						php_error_docref(NULL, E_WARNING, "Could not initialize xz encoder.");
 						efree(self);
 						php_stream_close(stream);
 						return NULL;
 					}
 				} else if ((strcmp(mode, "r") == 0) || (strcmp(mode, "rb") == 0)) {
-					if (!php_xz_init_decoder(self)) {
+					if (!php_xz_init_decoder(self, (uint64_t)mem)) {
 						php_error_docref(NULL, E_WARNING, "Could not initialize xz decoder");
 						efree(self);
 						php_stream_close(stream);
@@ -363,9 +310,7 @@ php_stream *php_stream_xzopen(php_stream_wrapper *wrapper, const char *path, con
 
 	return NULL;
 }
-/* }}} */
 
-/* {{{ xz_stream_wops */
 static php_stream_wrapper_ops xz_stream_wops = {
 	php_stream_xzopen,
 	NULL,
@@ -378,12 +323,9 @@ static php_stream_wrapper_ops xz_stream_wops = {
 	NULL,
 	NULL
 };
-/* }}} */
 
-/* {{{ php_stream_xz_wrapper */
 php_stream_wrapper php_stream_xz_wrapper = {
 	&xz_stream_wops,
 	NULL,
 	0
 };
-/* }}} */

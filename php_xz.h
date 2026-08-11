@@ -2,6 +2,8 @@
 # define PHP_XZ_H
 
 #include "php.h"
+#include "xz_compat.h"
+
 #include <lzma.h>
 
 #define PHP_XZ_VERSION "1.2.0"
@@ -24,17 +26,5 @@ extern php_stream_wrapper php_stream_xz_wrapper;
 #ifdef ZTS
 #	include "TSRM.h"
 #endif
-
-#if PHP_VERSION_ID < 80600
-# define zend_ini_long_literal(name) zend_ini_long((name), sizeof("" name) - 1, 0)
-#endif
-
-#if !defined(ZEND_PARSE_PARAMETERS_NONE) && PHP_VERSION_ID < 80000
-#define ZEND_PARSE_PARAMETERS_NONE() \
-	ZEND_PARSE_PARAMETERS_START(0, 0) \
-	ZEND_PARSE_PARAMETERS_END()
-#endif
-
-php_stream *php_stream_xzopen(php_stream_wrapper *wrapper, const char *path, const char *mode_pass, int options, zend_string **opened_path, php_stream_context *context STREAMS_DC);
 
 #endif	/* PHP_XZ_H */
