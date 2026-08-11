@@ -66,4 +66,44 @@
 	} while (0)
 #endif
 
+#define XZ_EXPECTED_OBJECT_EX(obj_zv, ce, class_name, arg_num) \
+	do { \
+		if (Z_OBJCE_P(obj_zv) != (ce)) { \
+			XZ_TYPE_ERROR(arg_num, class_name, obj_zv); \
+		} \
+	} while (0)
+
+#define XZ_EXPECTED_OBJECT(obj_zv, ce, class_name) \
+	XZ_EXPECTED_OBJECT_EX(obj_zv, ce, class_name, 1)
+
+#if PHP_VERSION_ID >= 80000
+
+#define XZ_TYPE_ERROR(arg_num, class_name, obj_zv) \
+	do { \
+		zend_argument_type_error(arg_num, "must be of type " class_name ", %s given", zend_zval_type_name(obj_zv)); \
+		RETURN_THROWS(); \
+	} while (0)
+
+#define XZ_VALUE_ERROR(arg_num, php8_msg, php7_msg) \
+	do { \
+		zend_argument_value_error(arg_num, php8_msg); \
+		RETURN_THROWS(); \
+	} while (0)
+
+#else
+
+#define XZ_TYPE_ERROR(arg_num, class_name, obj_zv) \
+	do { \
+		php_error_docref(NULL, E_WARNING, "expected " class_name); \
+		RETURN_FALSE; \
+	} while (0)
+
+#define XZ_VALUE_ERROR(arg_num, php8_msg, php7_msg) \
+	do { \
+		php_error_docref(NULL, E_WARNING, php7_msg); \
+		RETURN_FALSE; \
+	} while (0)
+
+#endif
+
 #endif /* XZ_COMPAT_H */
