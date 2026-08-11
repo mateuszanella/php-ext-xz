@@ -1,77 +1,33 @@
-/*
-	+----------------------------------------------------------------------+
-	| Copyright (c) 2019 The PHP Group                                     |
-	+----------------------------------------------------------------------+
-	| This source file is subject to version 3.01 of the PHP license,      |
-	| that is bundled with this package in the file LICENSE, and is        |
-	| available through the world-wide-web at the following url:           |
-	| http://www.php.net/license/3_01.txt                                  |
-	| If you did not receive a copy of the PHP license and are unable to   |
-	| obtain it through the world-wide-web, please send a note to          |
-	| license@php.net so we can mail you a copy immediately.               |
-	+----------------------------------------------------------------------+
-	| Authors: Payden Sutherland <payden@paydensutherland.com>             |
-	|          Dan Ungureanu <udan1107@gmail.com>                          |
-	|          authors of the `zlib` extension (for guidance)              |
-	|          krakjoe (updated for PHP 7)                                 |
-	+----------------------------------------------------------------------+
-*/
-
 #include <lzma.h>
 
 #include "php.h"
 #include "php_streams.h"
 #include "fopen_wrappers.h"
 #include "php_xz.h"
+#include "xz_encode.h"
+#include "xz_decode.h"
 
 /* {{{ php_xz_stream_data_t */
 struct php_xz_stream_data_t {
-
-	/* LZMA stream used internally. */
 	lzma_stream strm;
-
-	/* The size of the input buffer. */
 	size_t in_buf_sz;
-
-	/* The size of the output buffer. */
 	size_t out_buf_sz;
-
-	/* The input buffer. */
 	uint8_t *in_buf;
-
-	/* The output buffer. */
 	uint8_t *out_buf;
-
-	/* The index of the output buffer.
-	   NOTE: This is used only for decompressing. */
 	uint8_t *out_buf_idx;
-
-	/* The PHP stream. */
 	php_stream *stream;
-
-	/* The file descriptor. */
 	int fd;
-
-	/* The type of access required. */
 	char mode[64];
-
-	/* Compression level used. */
 	unsigned long level;
-
-	/* The maximum amount of memory that can be used when decompressing. */
 	uint64_t memory;
 };
 /* }}} */
 
-/* {{{ php_xz_decompress
-   Decompresses the stream.
-   Returns 0 on success, -1 on error
-*/
+/* {{{ php_xz_decompress */
 static int php_xz_decompress(struct php_xz_stream_data_t *self)
 {
 	lzma_stream *strm = &self->strm;
 	lzma_action action = LZMA_RUN;
-	lzma_ret ret;
 
 	if (strm->avail_in == 0 && !php_stream_eof(self->stream)) {
 #if PHP_VERSION_ID >= 70400
@@ -86,7 +42,7 @@ static int php_xz_decompress(struct php_xz_stream_data_t *self)
 		strm->next_in = self->in_buf;
 	}
 
-	ret = lzma_code(strm, action);
+	lzma_ret ret = lzma_code(strm, action);
 	if (ret != LZMA_OK && ret != LZMA_STREAM_END) {
 		return -1;
 	}
@@ -95,11 +51,7 @@ static int php_xz_decompress(struct php_xz_stream_data_t *self)
 }
 /* }}} */
 
-/* {{{ php_xz_compress
-   Compresses the stream by consuming all bytes in `lzma_stream->next_in` and
-   writing them into the file.
-   Returns the number of bytes to be written or -1 on error
-*/
+/* {{{ php_xz_compress */
 static int php_xz_compress(struct php_xz_stream_data_t *self)
 {
 	lzma_stream *strm = &self->strm;
@@ -110,11 +62,11 @@ static int php_xz_compress(struct php_xz_stream_data_t *self)
 		lzma_ret ret = lzma_code(strm, action);
 		size_t len = self->out_buf_sz - strm->avail_out;
 		if (ret != LZMA_OK) {
-			to_write = -1; /* error in compression */
+			to_write = -1;
 			break;
 		} else if (len) {
 			if (php_stream_write(self->stream, (char *)self->out_buf, len) != len) {
-				to_write = -1; /* error in output stream */
+				to_write = -1;
 				break;
 			}
 		}
@@ -128,69 +80,50 @@ static int php_xz_compress(struct php_xz_stream_data_t *self)
 }
 /* }}} */
 
-/* {{{ php_xz_init_decoder
-   Initializes a decoder. */
+/* {{{ php_xz_init_decoder */
 static int php_xz_init_decoder(struct php_xz_stream_data_t *self)
 {
-	lzma_stream *strm = &self->strm;
-
-	if (lzma_auto_decoder(strm, self->memory ? self->memory : UINT64_MAX, LZMA_CONCATENATED) != LZMA_OK) {
+	if (!php_xz_decoder_init_stream(&self->strm, self->memory)) {
 		return 0;
 	}
 
 	self->in_buf_sz = XZ_BUFFER_SIZE;
 	self->in_buf = emalloc(self->in_buf_sz);
-	strm->avail_in = 0;
-	strm->next_in = self->in_buf;
+	self->strm.avail_in = 0;
+	self->strm.next_in = self->in_buf;
 
 	self->out_buf_sz = XZ_BUFFER_SIZE;
 	self->out_buf = emalloc(self->out_buf_sz);
 	self->out_buf_idx = self->out_buf;
-	strm->avail_out = self->out_buf_sz;
-	strm->next_out = self->out_buf;
+	self->strm.avail_out = self->out_buf_sz;
+	self->strm.next_out = self->out_buf;
 
 	return 1;
 }
 /* }}} */
 
-/* {{{ php_xz_init_encoder
-   Initializes an encoder. */
+/* {{{ php_xz_init_encoder */
 static int php_xz_init_encoder(struct php_xz_stream_data_t *self)
 {
-	lzma_stream *strm = &self->strm;
-
-	lzma_options_lzma opt_lzma2;
-	if (lzma_lzma_preset(&opt_lzma2, self->level)) {
-		return 0;
-	}
-
-	lzma_filter filters[] = {
-		{ .id = LZMA_FILTER_LZMA2, .options = &opt_lzma2 },
-		{ .id = LZMA_VLI_UNKNOWN,  .options = NULL },
-	};
-
-	lzma_ret ret = lzma_stream_encoder(strm, filters, LZMA_CHECK_CRC64);
-
-	if (ret != LZMA_OK) {
+	if (!php_xz_encoder_init_stream(&self->strm, self->level)) {
 		return 0;
 	}
 
 	self->in_buf_sz = XZ_BUFFER_SIZE;
 	self->in_buf = emalloc(self->in_buf_sz);
-	strm->avail_in = 0;
-	strm->next_in = self->in_buf;
+	self->strm.avail_in = 0;
+	self->strm.next_in = self->in_buf;
 
 	self->out_buf_sz = XZ_BUFFER_SIZE;
 	self->out_buf = emalloc(self->out_buf_sz);
-	strm->avail_out = self->out_buf_sz;
-	strm->next_out = self->out_buf;
+	self->strm.avail_out = self->out_buf_sz;
+	self->strm.next_out = self->out_buf;
 
 	return 1;
 }
 /* }}} */
 
-/* {{{ php_xziop_read
-   Reads from the stream. */
+/* {{{ php_xziop_read */
 #if PHP_VERSION_ID >= 70400
 static ssize_t php_xziop_read(php_stream *stream, char *buf, size_t count)
 #else
@@ -199,7 +132,6 @@ static size_t php_xziop_read(php_stream *stream, char *buf, size_t count)
 {
 	struct php_xz_stream_data_t *self = (struct php_xz_stream_data_t *) stream->abstract;
 	lzma_stream *strm = &self->strm;
-
 
 	size_t to_read = count, have_read = 0;
 
@@ -217,7 +149,6 @@ static size_t php_xziop_read(php_stream *stream, char *buf, size_t count)
 			if (strm->avail_out) {
 				self->out_buf_idx = strm->next_out;
 			} else {
-				/* All bytes in the output buffer have been read. */
 				self->out_buf_idx = strm->next_out;
 				self->out_buf_idx = strm->next_out = self->out_buf;
 				strm->avail_out = self->out_buf_sz;
@@ -228,7 +159,6 @@ static size_t php_xziop_read(php_stream *stream, char *buf, size_t count)
 			stream->eof = 1;
 			return have_read;
 		}
-
 
 		if (php_xz_decompress(self) < 0) {
 #if PHP_VERSION_ID >= 70400
@@ -244,8 +174,7 @@ static size_t php_xziop_read(php_stream *stream, char *buf, size_t count)
 }
 /* }}} */
 
-/* {{{ php_xziop_write
-   Writes to the stream. */
+/* {{{ php_xziop_write */
 #if PHP_VERSION_ID >= 70400
 static ssize_t php_xziop_write(php_stream *stream, const char *buf, size_t count)
 #else
@@ -258,7 +187,6 @@ static size_t php_xziop_write(php_stream *stream, const char *buf, size_t count)
 	lzma_stream *strm = &self->strm;
 
 	while (count - wrote > self->in_buf_sz - strm->avail_in) {
-		/* Copy as many bytes into next_in buffer as we can. */
 		memcpy((char *)self->in_buf + strm->avail_in, buf + wrote, self->in_buf_sz - strm->avail_in);
 		wrote += self->in_buf_sz - strm->avail_in;
 		strm->avail_in = self->in_buf_sz;
@@ -281,8 +209,7 @@ static size_t php_xziop_write(php_stream *stream, const char *buf, size_t count)
 }
 /* }}} */
 
-/* {{{ php_xziop_close
-   Closes the stream. */
+/* {{{ php_xziop_close */
 static int php_xziop_close(php_stream *stream, int close_handle)
 {
 	struct php_xz_stream_data_t *self = (struct php_xz_stream_data_t *) stream->abstract;
@@ -290,7 +217,6 @@ static int php_xziop_close(php_stream *stream, int close_handle)
 
 	lzma_stream *strm = &self->strm;
 
-	/* In write mode, finish writing LZMA data before continuing. */
 	if (strcmp(self->mode, "w") == 0 || strcmp(self->mode, "wb") == 0) {
 		lzma_ret lz_ret;
 
@@ -324,8 +250,7 @@ static int php_xziop_close(php_stream *stream, int close_handle)
 }
 /* }}} */
 
-/* {{{ php_xziop_flush
-   Flushes the stream. */
+/* {{{ php_xziop_flush */
 static int php_xziop_flush(php_stream *stream)
 {
 	struct php_xz_stream_data_t *self = (struct php_xz_stream_data_t *) stream->abstract;
@@ -337,44 +262,32 @@ static int php_xziop_flush(php_stream *stream)
 }
 /* }}} */
 
-/* {{{ php_stream_xzio_ops
-   Table containing basic I/O operations and mapped functions. */
+/* {{{ php_stream_xzio_ops */
 php_stream_ops php_stream_xzio_ops = {
-	php_xziop_write, /* write */
-	php_xziop_read, /* read */
-	php_xziop_close, /* close */
-	php_xziop_flush, /* flush */
+	php_xziop_write,
+	php_xziop_read,
+	php_xziop_close,
+	php_xziop_flush,
 	"XZ",
-	NULL, /* seek */
-	NULL, /* cast */
-	NULL, /* stat */
-	NULL,  /* set_option */
-	.label = "XZ",
-	.write = php_xziop_write,
-	.read = php_xziop_read,
-	.close = php_xziop_close,
-	.flush = php_xziop_flush,
-	.seek = NULL,
-	.cast = NULL,
-	.stat = NULL,
-	.set_option = NULL
+	NULL,
+	NULL,
+	NULL,
+	NULL
 };
 /* }}} */
 
-/* {{{ php_stream_xzopen
-   Opens a stream. */
+/* {{{ php_stream_xzopen */
 php_stream *php_stream_xzopen(php_stream_wrapper *wrapper, const char *path, const char *mode_pass, int options, zend_string **opened_path, php_stream_context *context STREAMS_DC)
 {
 	char mode[64];
-	zend_ulong level = zend_ini_long_literal("xz.compression_level");;
-	zend_ulong mem = zend_ini_long_literal("xz.max_memory");
+	zend_long level = (zend_long)zend_ini_long_literal("xz.compression_level");
+	zend_long mem = (zend_long)zend_ini_long_literal("xz.max_memory");
 
 	php_stream *stream = NULL, *innerstream = NULL;
 
 	strncpy(mode, mode_pass, sizeof(mode));
 	mode[sizeof(mode) - 1] = '\0';
 
-	/* Split compression level and mode. */
 	char *colonp = strchr(mode, ':');
 	if (colonp) {
 		level = strtoul(colonp + 1, NULL, 10);
@@ -452,36 +365,25 @@ php_stream *php_stream_xzopen(php_stream_wrapper *wrapper, const char *path, con
 }
 /* }}} */
 
-/* {{{ xz_stream_wops
-   Table containing stream operations and mapped functions. */
+/* {{{ xz_stream_wops */
 static php_stream_wrapper_ops xz_stream_wops = {
-	php_stream_xzopen, /* open */
-	NULL, /* close */
-	NULL, /* fstat */
-	NULL, /* stat */
-	NULL, /* opendir */
+	php_stream_xzopen,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
 	"XZ",
-	NULL, /* unlink */
-	NULL, /* rename */
-	NULL, /* mkdir */
-	NULL  /* rmdir */
+	NULL,
+	NULL,
+	NULL,
+	NULL
 };
 /* }}} */
 
-/* {{{ php_stream_xz_wrapper
-   Table describing the wrapper. */
+/* {{{ php_stream_xz_wrapper */
 php_stream_wrapper php_stream_xz_wrapper = {
-	&xz_stream_wops, /* operations that can be performed */
-	NULL, /* context for the wrapper */
-	0     /* is_url */
+	&xz_stream_wops,
+	NULL,
+	0
 };
 /* }}} */
-
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * End:
- * vim600: sw=4 ts=4 fdm=marker
- * vim<600: sw=4 ts=4
- */
