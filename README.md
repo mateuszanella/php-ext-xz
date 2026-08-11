@@ -1,6 +1,7 @@
 # php-ext-xz
 
-PHP Extension providing XZ (LZMA2) compression/decompression functions.
+PHP Extension providing XZ (LZMA2) compression and decompression, with support for
+one-shot encoding, incremental streaming, and file operations via stream wrapper.
 
 ## Installation
 
@@ -11,7 +12,7 @@ pie install mateuszanella/php-ext-xz
 ```
 
 This will download the source and compile the extension for your current PHP version. After installing the module, you may need to enable it in your `php.ini` file.
-****
+
 ## Configuration
 
 ### php.ini
@@ -71,6 +72,23 @@ $rh = xzopen($file, 'r');
 xzpassthru($rh);
 xzclose($rh);
 ```
+
+### Incremental streaming
+
+For large data, network streams, or chunked processing, use the incremental API:
+
+```php
+$ctx = xz_encode_init();
+$out  = xz_encode_add($ctx, 'Hello, ');
+$out .= xz_encode_add($ctx, 'World!');
+$out .= xz_encode_finish($ctx);
+
+$ctx = xz_decode_init();
+$original = xz_decode_add($ctx, $out);
+```
+
+See [docs/USAGE.md](docs/USAGE.md) for the full API reference, constant tables,
+real-world wrapper patterns, and error handling details.
 
 ## Credits
 
