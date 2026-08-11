@@ -120,10 +120,10 @@ bytes. The context must not be used after this call.
 $ctx = xz_decode_init();
 $decoded  = xz_decode_add($ctx, $compressedChunk1);
 $decoded .= xz_decode_add($ctx, $compressedChunk2);
-// The decoder auto-finishes at XZ_STREAM_END — no finish() call needed for single streams.
+// The decoder auto-finishes at end of stream — no finish() call needed for single streams.
 $decoded .= xz_decode_finish($ctx);  // silent no-op here, but safe to call
 
-$status = xz_decode_get_status($ctx);     // XZ_STREAM_END (1)
+$status = xz_decode_get_status($ctx);     // 1 (stream finished)
 $consumed = xz_decode_get_read_len($ctx); // bytes consumed from compressed input
 ```
 
@@ -140,7 +140,7 @@ xz_decode_init(
 
 | Parameter | Type | Description |
 |---|---|---|
-| `$flags` | `int` | Bitmask of decoder flags (see [Constants](#decoder-flags)). Commonly `0` for single-stream or `XZ_CONCATENATED` for multi-stream input. |
+| `$flags` | `int` | Bitmask of decoder flags. `0` for single-stream or `XZ_CONCATENATED` for multi-stream input. |
 | `$memory_limit` | `int` | Maximum memory in bytes the decoder may allocate, or `0` for unlimited. Defaults to `xz.max_memory` INI setting if omitted. |
 
 ```php
@@ -148,7 +148,6 @@ xz_decode_init(
 $ctx = xz_decode_init();                               // single stream, unlimited memory
 $ctx = xz_decode_init(XZ_CONCATENATED);                // support multiple concatenated .xz streams
 $ctx = xz_decode_init(0, 64 * 1024 * 1024);            // single stream, 64 MB memory limit
-$ctx = xz_decode_init(XZ_CONCATENATED | XZ_TELL_ANY_CHECK, 0);
 ```
 
 Returns an `XZDecodeContext` object on success, `false` on failure.
@@ -161,7 +160,7 @@ xz_decode_add(XZDecodeContext $context, string $data): string|false
 
 Feeds compressed data into the decoder. Returns a decompressed output chunk. The
 decoder may buffer data internally until a complete block is available. After
-`XZ_STREAM_END`, further calls return `false` with a warning.
+the stream ends (status 1), further calls return `false` with a warning.
 
 #### `xz_decode_finish()`
 
@@ -179,11 +178,10 @@ silent no-op (the decoder has already auto-finished). For concatenated streams
 xz_decode_get_status(XZDecodeContext $context): int|false
 ```
 
-Returns the last lzma status code. Common values:
-- `XZ_OK` (0) — ready for more data
-- `XZ_STREAM_END` (1) — stream finished successfully
-
-Other codes (e.g. `XZ_DATA_ERROR`) indicate problems. See [Constants](#status-codes).
+Returns the last lzma status code:
+- `0` — ready for more data
+- `1` — stream finished successfully
+- `9` — data is corrupt
 
 #### `xz_decode_get_read_len()`
 
@@ -262,7 +260,7 @@ class XzDecompressor
 
     public function isDone(): bool
     {
-        return xz_decode_get_status($this->ctx) === XZ_STREAM_END;
+        return xz_decode_get_status($this->ctx) === 1;
     }
 }
 ```
@@ -366,36 +364,13 @@ xzclose($fp);
 
 ## Constants reference
 
-### Actions
+`xz_get_status()` returns raw lzma status integers. Common values:
 
-Used with `xz_encode_add()` and `xz_decode_add()` when the optional third parameter
-is provided (for advanced use). The default action when omitted is `XZ_RUN`.
-
-| Constant | Value | Description |
-|---|---|---|
-| `XZ_RUN` | `0` | Continue processing. Default action for `add()`. |
-| `XZ_SYNC_FLUSH` | `1` | Flush all pending output (degrades compression ratio). |
-| `XZ_FULL_FLUSH` | `2` | Full flush with byte alignment (degrades ratio significantly). |
-| `XZ_FULL_BARRIER` | `4` | Full flush with barrier marker. |
-| `XZ_FINISH` | `3` | Finish the stream. Used internally by `finish()`. |
-
-### Status codes
-
-Returned by `xz_decode_get_status()`, or the last `status` property on a context.
-
-| Constant | Value | Description |
-|---|---|---|
-| `XZ_OK` | `0` | Operation succeeded. Ready for more data. |
-| `XZ_STREAM_END` | `1` | End of stream reached. |
-| `XZ_NO_CHECK` | `2` | Input stream has no integrity check. |
-| `XZ_UNSUPPORTED_CHECK` | `3` | Input stream uses an unsupported check type. |
-| `XZ_GET_CHECK` | `4` | Integrity check type is available. |
-| `XZ_MEM_ERROR` | `5` | Cannot allocate memory. |
-| `XZ_MEMLIMIT_ERROR` | `6` | Memory limit was exceeded. |
-| `XZ_FORMAT_ERROR` | `7` | File format not recognized. |
-| `XZ_OPTIONS_ERROR` | `8` | Invalid or unsupported options. |
-| `XZ_DATA_ERROR` | `9` | Data is corrupt. |
-| `XZ_BUF_ERROR` | `10` | No progress is possible (e.g. needs more input space). |
+| Value | Meaning |
+|---|---|
+| `0` | Operation succeeded. Ready for more data. |
+| `1` | End of stream reached. |
+| `9` | Data is corrupt. |
 
 ### Check types
 
@@ -415,17 +390,6 @@ Pass to `xz_decode_init()` as a bitmask.
 | Constant | Value | Description |
 |---|---|---|
 | `XZ_CONCATENATED` | `8` | Accept multiple concatenated xz streams. |
-| `XZ_TELL_NO_CHECK` | `1` | Report if the stream has no integrity check. |
-| `XZ_TELL_UNSUPPORTED_CHECK` | `2` | Report if the integrity check type is unsupported. |
-| `XZ_TELL_ANY_CHECK` | `4` | Report even if the check type is supported. |
-| `XZ_IGNORE_CHECK` | `16` | Don't verify the integrity check on decompression. |
-
-### Preset constants
-
-| Constant | Value | Description |
-|---|---|---|
-| `XZ_PRESET_DEFAULT` | `6` | The default compression preset. |
-| `XZ_PRESET_EXTREME` | `2147483648` | Bit flag for extreme compression mode. |
 
 ---
 
@@ -465,8 +429,8 @@ Same conditions trigger `E_WARNING` and return `false`.
 
 | Context state | `add()` behavior | `finish()` behavior |
 |---|---|---|
-| Active (`XZ_OK`) | Processes data, returns output | Finalizes, returns trailing output |
-| Finished (`XZ_STREAM_END`) | Encode: returns `false` + warning<br>Decode: returns `false` + warning | Encode: returns `false` + warning<br>Decode: returns `""` (silent no-op) |
+| Active (`0`) | Processes data, returns output | Finalizes, returns trailing output |
+| Finished (`1`) | Encode: returns `false` + warning<br>Decode: returns `false` + warning | Encode: returns `false` + warning<br>Decode: returns `""` (silent no-op) |
 
 The decode `finish()` is intentionally silent because single-stream decoders
 auto-finish — calling `finish()` defensively shouldn't raise warnings.

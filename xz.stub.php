@@ -140,13 +140,9 @@ function xz_encode_finish(XZEncodeContext $context): string|false {}
  * call {@see xz_decode_finish()} only when using the {@see XZ_CONCATENATED}
  * flag to process multiple concatenated streams.
  *
- * @param int      $flags        A bitmask of decoder flags. May include
- *                               {@see XZ_CONCATENATED} (process multiple
- *                               concatenated xz streams),
- *                               {@see XZ_TELL_NO_CHECK},
- *                               {@see XZ_TELL_UNSUPPORTED_CHECK},
- *                               {@see XZ_TELL_ANY_CHECK}, or
- *                               {@see XZ_IGNORE_CHECK}.
+ * @param int      $flags        A bitmask of decoder flags. {@see XZ_CONCATENATED}
+ *                               enables processing of multiple concatenated xz
+ *                               streams. Use `0` for single-stream decoding.
  * @param int|null $memory_limit Maximum memory (in bytes) the decoder is
  *                               allowed to allocate, or 0 for unlimited.
  *                               If omitted, the `xz.max_memory` INI setting
@@ -162,7 +158,7 @@ function xz_decode_init(int $flags = 0, int $memory_limit = 0): XZDecodeContext|
  * Each call consumes the given data chunk and returns any decompressed
  * output produced so far. The decoder may buffer data internally until
  * a complete block is available. When the end of the xz stream is
- * reached, the context status becomes {@see XZ_STREAM_END}.
+ * reached, the context status becomes `1`.
  *
  * @param XZDecodeContext $context A decompression context from {@see xz_decode_init()}.
  * @param string          $data    The compressed xz data chunk to decompress.
@@ -189,10 +185,10 @@ function xz_decode_finish(XZDecodeContext $context): string|false {}
  * Returns the current status of an incremental decompression context.
  *
  * @param XZDecodeContext $context A decompression context from {@see xz_decode_init()}.
- * @return int|false The last lzma status code. Common values are
- *                   {@see XZ_OK} (ready for more data) and
- *                   {@see XZ_STREAM_END} (stream finished). Returns
- *                   false if the context is invalid.
+ * @return int|false The last lzma status code. `0` when ready for more
+ *                   data, `1` when the stream has finished, `9` when
+ *                   the data is corrupt. Returns false if the context
+ *                   is invalid.
  */
 function xz_decode_get_status(XZDecodeContext $context): int|false {}
 
