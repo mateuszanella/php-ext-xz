@@ -28,7 +28,10 @@
 #include "php.h"
 #include "php_ini.h"
 #include "php_xz.h"
-#include "utils.h"
+#include "xz_encode.h"
+#include "xz_decode.h"
+#include "xz_compat.h"
+#include "xz_fopen_wrapper.h"
 
 #if PHP_VERSION_ID >= 80000
 # include "xz_arginfo.h"
@@ -36,24 +39,10 @@
 # include "xz_legacy_arginfo.h"
 #endif
 
-/* For compatibility with older PHP versions */
-#ifndef ZEND_PARSE_PARAMETERS_NONE
-#define ZEND_PARSE_PARAMETERS_NONE() \
-	ZEND_PARSE_PARAMETERS_START(0, 0) \
-	ZEND_PARSE_PARAMETERS_END()
-#endif
-
 /* {{{ INI entries. */
 PHP_INI_BEGIN()
-
-	/* Default compression level. Affects `xzencode` and `xzopen`, but only when
-	   the level was not specified. */
 	PHP_INI_ENTRY("xz.compression_level", "5", PHP_INI_ALL, NULL)
-
-	/* The maximum amount of memory that can be used when decompressing.
-	   `0` stands for unlimited. */
 	PHP_INI_ENTRY("xz.max_memory", "0", PHP_INI_SYSTEM, NULL)
-
 PHP_INI_END()
 /* }}} */
 
@@ -97,191 +86,90 @@ PHP_MINFO_FUNCTION(xz)
    Opens a file stream. */
 PHP_FUNCTION(xzopen)
 {
-	char *filename = NULL, *mode = NULL;
-	zend_long filename_len = 0, mode_len = 0;
-	zend_ulong compression_level = zend_ini_long_literal("xz.compression_level");
+	char *filename, *mode;
+	size_t filename_len, mode_len;
+	zend_long compression_level = (zend_long)zend_ini_long_literal("xz.compression_level");
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "ss|l", &filename, &filename_len, &mode, &mode_len, &compression_level) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(2, 3)
+		Z_PARAM_STRING(filename, filename_len)
+		Z_PARAM_STRING(mode, mode_len)
+		Z_PARAM_OPTIONAL
+		Z_PARAM_LONG(compression_level)
+	ZEND_PARSE_PARAMETERS_END();
 
 	char *mode_to_pass = emalloc(mode_len + 32);
-	snprintf(mode_to_pass, mode_len + 32, "%s:%lu", mode, compression_level);
+	snprintf(mode_to_pass, mode_len + 32, "%s:" ZEND_LONG_FMT, mode, compression_level);
 
 	php_stream *stream = php_stream_xzopen(NULL, filename, mode_to_pass, 0, NULL, NULL STREAMS_CC);
 
 	if (!stream) {
-		RETURN_BOOL(0);
+		efree(mode_to_pass);
+		RETURN_FALSE;
 	}
 
+	efree(mode_to_pass);
 	php_stream_to_zval(stream, return_value);
 }
 /* }}} */
 
 /* {{{ proto string xzencode(string str)
-   Retuns the encoded string. */
+   Returns the encoded string. */
 PHP_FUNCTION(xzencode)
 {
-	/* The string to be encoded. */
-	uint8_t *in = NULL;
-	/* The length of the string to be encoded */
-	size_t in_len = 0;
+	char *in;
+	size_t in_len;
+	zend_long compression_level = (zend_long)zend_ini_long_literal("xz.compression_level");
 
-	zend_long compression_level = zend_ini_long_literal("xz.compression_level");
-
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "s|l", &in, &in_len, &compression_level) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 2)
+		Z_PARAM_STRING(in, in_len)
+		Z_PARAM_OPTIONAL
+		Z_PARAM_LONG(compression_level)
+	ZEND_PARSE_PARAMETERS_END();
 
 	if (compression_level < 0 || compression_level > 9) {
 #if PHP_VERSION_ID >= 80000
-        zend_argument_value_error(2, "must be between 0 and 9");
-        RETURN_THROWS();
+		zend_argument_value_error(2, "must be between 0 and 9");
+		RETURN_THROWS();
 #else
-        php_error_docref(NULL, E_WARNING, "compression level must be between 0 and 9");
-        RETURN_BOOL(0);
+		php_error_docref(NULL, E_WARNING, "compression level must be between 0 and 9");
+		RETURN_FALSE;
 #endif
 	}
 
-	/* The output string (encoded). */
-	uint8_t *out = NULL;
-	/* The length of the output string. */
-	size_t out_len = 0;
+	zend_string *out = php_xz_encode_string((const uint8_t *)in, in_len, (uint32_t)compression_level);
 
-	/* Internal buffer used for encoding. */
-	uint8_t buff[XZ_BUFFER_SIZE];
-
-	lzma_options_lzma opt_lzma2;
-	if (lzma_lzma_preset(&opt_lzma2, compression_level)) {
-		RETURN_BOOL(0);
+	if (!out) {
+		RETURN_FALSE;
 	}
 
-	lzma_filter filters[] = {
-		{ .id = LZMA_FILTER_LZMA2, .options = &opt_lzma2 },
-		{ .id = LZMA_VLI_UNKNOWN,  .options = NULL },
-	};
-
-	/* Initializing encoder. */
-	lzma_stream strm = LZMA_STREAM_INIT;
-	if (lzma_stream_encoder(&strm, filters, LZMA_CHECK_CRC64) != LZMA_OK) {
-		RETURN_BOOL(0);
-	}
-
-	/* Setting the input source. */
-	strm.avail_in = in_len;
-	strm.next_in = in;
-
-	/* Setting the output source. */
-	strm.avail_out = XZ_BUFFER_SIZE;
-	strm.next_out = buff;
-
-	/* Encoding the string. */
-	lzma_ret status = LZMA_OK;
-	while (strm.avail_in != 0) {
-		status = lzma_code(&strm, LZMA_RUN);
-		/* More memory is required. */
-		if (strm.avail_out == 0) {
-			out = memmerge(out, buff, out_len, XZ_BUFFER_SIZE);
-			out_len += XZ_BUFFER_SIZE;
-			strm.avail_out = XZ_BUFFER_SIZE;
-			strm.next_out = buff;
-		}
-	}
-
-	/* Finish encoding. */
-	while (status != LZMA_STREAM_END) {
-		status = lzma_code(&strm, LZMA_FINISH);
-		/* An error occured. */
-		if ((status != LZMA_STREAM_END) && (status != LZMA_OK)) {
-			lzma_end(&strm);
-			RETURN_LONG(status);
-		}
-		/* More memory is required. */
-		if (strm.avail_out == 0) {
-			out = memmerge(out, buff, out_len, XZ_BUFFER_SIZE);
-			out_len += XZ_BUFFER_SIZE;
-			strm.avail_out = XZ_BUFFER_SIZE;
-			strm.next_out = buff;
-		}
-	}
-
-	/* Merging last fragment. */
-	out = memmerge(out, buff, out_len, XZ_BUFFER_SIZE - strm.avail_out);
-	out_len += XZ_BUFFER_SIZE - strm.avail_out;
-
-	lzma_end(&strm);
-
-	RETURN_STRINGL((char *)out, out_len);
+	RETURN_STR(out);
 }
 /* }}} */
 
 /* {{{ proto string xzdecode(string str)
-   Retuns the decoded string. */
+   Returns the decoded string. */
 PHP_FUNCTION(xzdecode)
 {
-	/* The string to be encoded. */
-	uint8_t *in = NULL;
-	/* The length of the string to be encoded */
-	size_t in_len = 0;
+	char *in;
+	size_t in_len;
 
-	if (zend_parse_parameters(ZEND_NUM_ARGS(), "s", &in, &in_len) == FAILURE) {
-		return;
-	}
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_STRING(in, in_len)
+	ZEND_PARSE_PARAMETERS_END();
 
 	if (!in_len) {
-		RETURN_BOOL(0); /* empty string is not xz data */
+		RETURN_FALSE;
 	}
 
-	/* The output string (encoded). */
-	uint8_t *out = NULL;
-	/* The length of the output string. */
-	size_t out_len = 0;
+	uint64_t memory_limit = (uint64_t)zend_ini_long_literal("xz.max_memory");
 
-	/* Internal buffer used for encoding. */
-	uint8_t buff[XZ_BUFFER_SIZE];
+	zend_string *out = php_xz_decode_string((const uint8_t *)in, in_len, memory_limit);
 
-	/* Initializing decoder. */
-	lzma_stream strm = LZMA_STREAM_INIT;
-	uint64_t mem = zend_ini_long_literal("xz.max_memory");
-	if (lzma_auto_decoder(&strm, mem ? mem : UINT64_MAX, LZMA_CONCATENATED) != LZMA_OK) {
-		RETURN_BOOL(0);
+	if (!out) {
+		RETURN_FALSE;
 	}
 
-	/* Setting the input source. */
-	strm.avail_in = in_len;
-	strm.next_in = in;
-
-	/* Setting the output source. */
-	strm.avail_out = XZ_BUFFER_SIZE;
-	strm.next_out = buff;
-
-	/* Decoding the string */
-	lzma_ret status = LZMA_OK;
-	while (strm.avail_in != 0) {
-		status = lzma_code(&strm, LZMA_RUN);
-		if (status != LZMA_OK && status != LZMA_STREAM_END) {
-			if (out) {
-				efree(out);
-			}
-			lzma_end(&strm);
-			RETURN_BOOL(0); /* probably not xz data */
-		}
-
-		/* More memory is required. */
-		if (strm.avail_out == 0) {
-			out = memmerge(out, buff, out_len, XZ_BUFFER_SIZE);
-			out_len += XZ_BUFFER_SIZE;
-			strm.avail_out = XZ_BUFFER_SIZE;
-			strm.next_out = buff;
-		}
-	}
-	/* Merging last fragment. */
-	out = memmerge(out, buff, out_len, XZ_BUFFER_SIZE - strm.avail_out);
-	out_len += XZ_BUFFER_SIZE - strm.avail_out;
-
-	lzma_end(&strm);
-
-	RETURN_STRINGL((char *)out, out_len);
+	RETURN_STR(out);
 }
 /* }}} */
 
@@ -292,8 +180,8 @@ zend_module_entry xz_module_entry = {
     ext_functions,
     PHP_MINIT(xz),
     PHP_MSHUTDOWN(xz),
-    NULL, /* PHP_RINIT(xz) */
-    NULL, /* PHP_RSHUTDOWN(xz) */
+    NULL,
+    NULL,
     PHP_MINFO(xz),
     PHP_XZ_VERSION,
     STANDARD_MODULE_PROPERTIES

@@ -17,34 +17,13 @@
 	+----------------------------------------------------------------------+
 */
 
-#ifndef PHP_XZ_H
-# define PHP_XZ_H
-
-#include "php.h"
-
-#define XZ_BUFFER_SIZE 4096
-
-#include "xz_compat.h"
+#ifndef PHP_XZ_ENCODE_H
+#define PHP_XZ_ENCODE_H
 
 #include <lzma.h>
+#include "php_xz.h"
 
-#define PHP_XZ_VERSION "1.2.0"
+zend_string *php_xz_encode_string(const uint8_t *data, size_t data_len, uint32_t level);
+int php_xz_encoder_init_stream(lzma_stream *strm, uint32_t level);
 
-extern zend_module_entry xz_module_entry;
-extern php_stream_wrapper php_stream_xz_wrapper;
-
-# define phpext_xz_ptr &xz_module_entry
-
-#ifdef PHP_WIN32
-#	define PHP_XZ_API __declspec(dllexport)
-#elif defined(__GNUC__) && (__GNUC__ >= 4)
-#	define PHP_XZ_API __attribute__ ((visibility("default")))
-#else
-#	define PHP_XZ_API
-#endif
-
-#ifdef ZTS
-#	include "TSRM.h"
-#endif
-
-#endif	/* PHP_XZ_H */
+#endif /* PHP_XZ_ENCODE_H */

@@ -17,34 +17,53 @@
 	+----------------------------------------------------------------------+
 */
 
-#ifndef PHP_XZ_H
-# define PHP_XZ_H
+#ifndef XZ_COMPAT_H
+#define XZ_COMPAT_H
 
-#include "php.h"
+#if PHP_VERSION_ID < 80600
+# define zend_ini_long_literal(name) zend_ini_long((name), sizeof("" name) - 1, 0)
+#endif
 
-#define XZ_BUFFER_SIZE 4096
+#if PHP_VERSION_ID < 80000
+#define RETURN_THROWS() return
+#endif
 
-#include "xz_compat.h"
+#if !defined(ZEND_PARSE_PARAMETERS_NONE) && PHP_VERSION_ID < 80000
+#define ZEND_PARSE_PARAMETERS_NONE() \
+	ZEND_PARSE_PARAMETERS_START(0, 0) \
+	ZEND_PARSE_PARAMETERS_END()
+#endif
 
-#include <lzma.h>
+#ifndef ZEND_ACC_NO_DYNAMIC_PROPERTIES
+#define ZEND_ACC_NO_DYNAMIC_PROPERTIES 0
+#endif
 
-#define PHP_XZ_VERSION "1.2.0"
+#ifndef ZEND_ACC_NOT_SERIALIZABLE
+#define ZEND_ACC_NOT_SERIALIZABLE 0
+#endif
 
-extern zend_module_entry xz_module_entry;
-extern php_stream_wrapper php_stream_xz_wrapper;
-
-# define phpext_xz_ptr &xz_module_entry
-
-#ifdef PHP_WIN32
-#	define PHP_XZ_API __declspec(dllexport)
-#elif defined(__GNUC__) && (__GNUC__ >= 4)
-#	define PHP_XZ_API __attribute__ ((visibility("default")))
+#if PHP_VERSION_ID >= 70400
+# define XZ_STREAM_RET     ssize_t
+# define XZ_STREAM_ERR_VAL -1
 #else
-#	define PHP_XZ_API
+# define XZ_STREAM_RET     size_t
+# define XZ_STREAM_ERR_VAL 0
 #endif
 
-#ifdef ZTS
-#	include "TSRM.h"
+#if PHP_VERSION_ID >= 70400
+# define XZ_STREAM_READ_INTO(strm, stream, buf) \
+	do { \
+		ssize_t _xr = php_stream_read((stream), (char *)(buf), XZ_BUFFER_SIZE); \
+		if (_xr < 0) { return -1; } \
+		(strm)->avail_in = _xr; \
+		(strm)->next_in = (buf); \
+	} while (0)
+#else
+# define XZ_STREAM_READ_INTO(strm, stream, buf) \
+	do { \
+		(strm)->avail_in = php_stream_read((stream), (char *)(buf), XZ_BUFFER_SIZE); \
+		(strm)->next_in = (buf); \
+	} while (0)
 #endif
 
-#endif	/* PHP_XZ_H */
+#endif /* XZ_COMPAT_H */
