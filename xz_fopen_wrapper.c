@@ -34,7 +34,7 @@ struct php_xz_stream_ctx {
 	uint8_t    *out_buf;
 	uint8_t    *out_buf_idx;
 	php_stream *stream;
-	bool        is_write;
+	zend_bool   is_write;
 };
 
 static int php_xz_decompress(struct php_xz_stream_ctx *self)
@@ -42,12 +42,7 @@ static int php_xz_decompress(struct php_xz_stream_ctx *self)
 	lzma_stream *strm = &self->strm;
 
 	if (strm->avail_in == 0 && !php_stream_eof(self->stream)) {
-		ssize_t read = php_stream_read(self->stream, (char *)self->in_buf, XZ_BUFFER_SIZE);
-		if (read < 0) {
-			return -1;
-		}
-		strm->avail_in = read;
-		strm->next_in = self->in_buf;
+		XZ_STREAM_READ_INTO(strm, self->stream, self->in_buf);
 	}
 
 	lzma_ret ret = lzma_code(strm, LZMA_RUN);
@@ -70,7 +65,7 @@ static int php_xz_compress(struct php_xz_stream_ctx *self)
 			to_write = -1;
 			break;
 		}
-		if (len && php_stream_write(self->stream, (char *)self->out_buf, len) != (ssize_t)len) {
+		if (len && php_stream_write(self->stream, (char *)self->out_buf, len) != len) {
 			to_write = -1;
 			break;
 		}
@@ -118,7 +113,7 @@ static int php_xz_init_encoder(struct php_xz_stream_ctx *self, uint32_t level)
 	return 1;
 }
 
-static ssize_t php_xziop_read(php_stream *stream, char *buf, size_t count)
+static XZ_STREAM_RET php_xziop_read(php_stream *stream, char *buf, size_t count)
 {
 	struct php_xz_stream_ctx *self = (struct php_xz_stream_ctx *) stream->abstract;
 	lzma_stream *strm = &self->strm;
@@ -151,7 +146,7 @@ static ssize_t php_xziop_read(php_stream *stream, char *buf, size_t count)
 
 		if (php_xz_decompress(self) < 0) {
 			if (!have_read) {
-				return -1;
+				return XZ_STREAM_ERR_VAL;
 			}
 			break;
 		}
@@ -160,7 +155,7 @@ static ssize_t php_xziop_read(php_stream *stream, char *buf, size_t count)
 	return have_read;
 }
 
-static ssize_t php_xziop_write(php_stream *stream, const char *buf, size_t count)
+static XZ_STREAM_RET php_xziop_write(php_stream *stream, const char *buf, size_t count)
 {
 	struct php_xz_stream_ctx *self = (struct php_xz_stream_ctx *) stream->abstract;
 	size_t wrote = 0;
@@ -183,7 +178,7 @@ static ssize_t php_xziop_write(php_stream *stream, const char *buf, size_t count
 		strm->avail_in += count - wrote;
 	}
 
-	return (bytes_consumed < 0 ? -1 : (ssize_t)count);
+	return bytes_consumed < 0 ? XZ_STREAM_ERR_VAL : (XZ_STREAM_RET)count;
 }
 
 static int php_xziop_close(php_stream *stream, int close_handle)

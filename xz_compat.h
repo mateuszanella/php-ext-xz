@@ -42,4 +42,28 @@
 #define ZEND_ACC_NOT_SERIALIZABLE 0
 #endif
 
+#if PHP_VERSION_ID >= 70400
+# define XZ_STREAM_RET     ssize_t
+# define XZ_STREAM_ERR_VAL -1
+#else
+# define XZ_STREAM_RET     size_t
+# define XZ_STREAM_ERR_VAL 0
+#endif
+
+#if PHP_VERSION_ID >= 70400
+# define XZ_STREAM_READ_INTO(strm, stream, buf) \
+	do { \
+		ssize_t _xr = php_stream_read((stream), (char *)(buf), XZ_BUFFER_SIZE); \
+		if (_xr < 0) { return -1; } \
+		(strm)->avail_in = _xr; \
+		(strm)->next_in = (buf); \
+	} while (0)
+#else
+# define XZ_STREAM_READ_INTO(strm, stream, buf) \
+	do { \
+		(strm)->avail_in = php_stream_read((stream), (char *)(buf), XZ_BUFFER_SIZE); \
+		(strm)->next_in = (buf); \
+	} while (0)
+#endif
+
 #endif /* XZ_COMPAT_H */
