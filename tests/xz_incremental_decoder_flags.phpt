@@ -11,7 +11,7 @@ if (!extension_loaded("xz")) {
 $valid = xzencode(str_repeat('decoder flags test. ', 100));
 
 // IGNORE_CHECK: does not break valid stream decoding
-$ctx = xz_decode_init(XZ_IGNORE_CHECK);
+$ctx = xz_decode_init(XZ_FORMAT_XZ, ['flags' => XZ_IGNORE_CHECK]);
 var_dump($ctx !== false);
 if ($ctx !== false) {
 	$decoded = xz_decode_add($ctx, $valid);
@@ -21,7 +21,7 @@ if ($ctx !== false) {
 }
 
 // IGNORE_CHECK | CONCATENATED: combined flags
-$ctx2 = xz_decode_init(XZ_IGNORE_CHECK | XZ_CONCATENATED);
+$ctx2 = xz_decode_init(XZ_FORMAT_XZ, ['flags' => XZ_IGNORE_CHECK | XZ_CONCATENATED]);
 var_dump($ctx2 !== false);
 if ($ctx2 !== false) {
 	$decoded2 = xz_decode_add($ctx2, $valid);
@@ -32,7 +32,7 @@ if ($ctx2 !== false) {
 // FAIL_FAST: may be unsupported by older liblzma, accept false from init
 $corrupt = $valid;
 $corrupt[10] = chr(ord($corrupt[10]) ^ 0xFF);
-$ctx3 = xz_decode_init(XZ_FAIL_FAST);
+$ctx3 = xz_decode_init(XZ_FORMAT_XZ, ['flags' => XZ_FAIL_FAST]);
 if ($ctx3 === false) {
 	echo "FAIL_FAST unsupported by this liblzma build\n";
 } else {
@@ -42,7 +42,7 @@ if ($ctx3 === false) {
 }
 
 // FAIL_FAST | CONCATENATED: ditto
-$ctx4 = xz_decode_init(XZ_FAIL_FAST | XZ_CONCATENATED);
+$ctx4 = xz_decode_init(XZ_FORMAT_XZ, ['flags' => XZ_FAIL_FAST | XZ_CONCATENATED]);
 if ($ctx4 === false) {
 	echo "FAIL_FAST|CONCATENATED unsupported by this liblzma build\n";
 } else {

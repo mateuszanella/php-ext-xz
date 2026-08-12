@@ -87,6 +87,21 @@ $ctx = xz_decode_init();
 $original = xz_decode_add($ctx, $out);
 ```
 
+### Raw LZMA streams
+
+Besides the xz container, the incremental API can produce and consume bare
+LZMA1/LZMA2 streams (`XZ_FORMAT_RAW`). This is useful when the stream needs a
+custom container, for example embedding an archive. The `"filter"` option
+selects the codec, and `xz_encode_get_properties()` returns the codec property
+bytes:
+
+```php
+$ctx = xz_encode_init(XZ_FORMAT_RAW, ['filter' => XZ_FILTER_LZMA2, 'dict_size' => 1 << 20]);
+$packed  = xz_encode_add($ctx, $data);
+$packed .= xz_encode_finish($ctx);
+$props   = xz_encode_get_properties($ctx); // 1 byte for LZMA2, 5 for LZMA1
+```
+
 See [docs/USAGE.md](docs/USAGE.md) for the full API reference, constant tables,
 real-world wrapper patterns, and error handling details.
 

@@ -25,7 +25,7 @@ var_dump($result2 === 'hello world');
 var_dump(xz_decode_get_status($ctx2)); // XZ_STREAM_END = 1
 
 // With CONCATENATED flag, junk after valid stream should fail
-$ctx3 = xz_decode_init(XZ_CONCATENATED);
+$ctx3 = xz_decode_init(XZ_FORMAT_XZ, ['flags' => XZ_CONCATENATED]);
 $result3 = @xz_decode_add($ctx3, $with_junk);
 var_dump($result3 === false);
 var_dump(xz_decode_get_status($ctx3)); // XZ_DATA_ERROR or similar

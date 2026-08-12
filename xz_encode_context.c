@@ -22,6 +22,7 @@
 #include "php.h"
 #include "ext/standard/php_array.h"
 #include "xz_compat.h"
+#include "xz_options.h"
 
 zend_class_entry *xz_encode_context_ce;
 
@@ -110,45 +111,155 @@ static zend_string *php_xz_encode_context_process(php_xz_encode_context_obj *obj
 	return out;
 }
 
-/* {{{ proto XZEncodeContext xz_encode_init(int check, array options)
-   Creates a new incremental xz compression context. */
+static int xz_encode_validate_lzma_params(zend_long lc, zend_long lp, zend_long pb, zend_long dict_size)
+{
+	if (lc < -1 || lc > 4 || lp < -1 || lp > 4 || pb < -1 || pb > 4) {
+		return 0;
+	}
+	if (lc >= 0 && lp >= 0 && lc + lp > 4) {
+		return 0;
+	}
+	if (dict_size < 0) {
+		return 0;
+	}
+	return 1;
+}
+
+/* {{{ proto XZEncodeContext xz_encode_init(int format, array options)
+   Creates a new incremental xz or raw LZMA compression context. */
 PHP_FUNCTION(xz_encode_init)
 {
-	zend_long check = LZMA_CHECK_CRC64;
+	zend_long format = XZ_FORMAT_XZ;
 	HashTable *options = NULL;
 
 	ZEND_PARSE_PARAMETERS_START(0, 2)
 		Z_PARAM_OPTIONAL
-		Z_PARAM_LONG(check)
+		Z_PARAM_LONG(format)
 		Z_PARAM_ARRAY_HT(options)
 	ZEND_PARSE_PARAMETERS_END();
 
-	if (!is_valid_check((lzma_check)check)) {
-		XZ_VALUE_ERROR(1, "must be a valid XZ_CHECK_* constant", "check must be a valid XZ_CHECK_* constant");
+	if (format != XZ_FORMAT_XZ && format != XZ_FORMAT_RAW) {
+		XZ_VALUE_ERROR(1, "must be XZ_FORMAT_XZ or XZ_FORMAT_RAW", "format must be XZ_FORMAT_XZ or XZ_FORMAT_RAW");
 	}
 
 	zend_long compression_level = (zend_long)zend_ini_long_literal("xz.compression_level");
+	zend_long check = LZMA_CHECK_CRC64;
+	zend_long filter_id = LZMA_FILTER_LZMA2;
+	zend_long dict_size = 0;
+	zend_long lc = -1;
+	zend_long lp = -1;
+	zend_long pb = -1;
 
 	if (options) {
-		zval *level_zv = zend_hash_str_find(options, "level", sizeof("level") - 1);
-		if (level_zv) {
-			compression_level = zval_get_long(level_zv);
-		}
+		php_xz_opt_long(options, "check", &check);
+		php_xz_opt_long(options, "level", &compression_level);
+		php_xz_opt_long(options, "filter", &filter_id);
+		php_xz_opt_long(options, "dict_size", &dict_size);
+		php_xz_opt_long(options, "lc", &lc);
+		php_xz_opt_long(options, "lp", &lp);
+		php_xz_opt_long(options, "pb", &pb);
 	}
 
 	if (compression_level < 0 || compression_level > 9) {
 		XZ_VALUE_ERROR(2, "options['level'] must be between 0 and 9", "compression level must be between 0 and 9");
 	}
 
+	if (!is_valid_check((lzma_check)check)) {
+		XZ_VALUE_ERROR(2, "options['check'] must be a valid XZ_CHECK_* constant", "check must be a valid XZ_CHECK_* constant");
+	}
+
+	if (filter_id != LZMA_FILTER_LZMA1 && filter_id != LZMA_FILTER_LZMA2) {
+		XZ_VALUE_ERROR(2, "options['filter'] must be XZ_FILTER_LZMA1 or XZ_FILTER_LZMA2", "filter must be XZ_FILTER_LZMA1 or XZ_FILTER_LZMA2");
+	}
+
+	if (!xz_encode_validate_lzma_params(lc, lp, pb, dict_size)) {
+		XZ_VALUE_ERROR(2, "options['lc'], options['lp'], options['pb'] must be between 0 and 4 with lc + lp <= 4, and options['dict_size'] must be non-negative", "invalid LZMA parameters");
+	}
+
 	object_init_ex(return_value, xz_encode_context_ce);
 	php_xz_encode_context_obj *obj = php_xz_encode_context_from_obj(Z_OBJ_P(return_value));
 
-	lzma_ret ret = lzma_easy_encoder(&obj->strm, (uint32_t)compression_level, (lzma_check)check);
+	lzma_options_lzma opt;
+	if (lzma_lzma_preset(&opt, (uint32_t)compression_level)) {
+		zval_ptr_dtor(return_value);
+		RETURN_FALSE;
+	}
+
+	if (dict_size) {
+		opt.dict_size = (uint32_t)dict_size;
+	}
+	if (lc >= 0) {
+		opt.lc = (uint32_t)lc;
+	}
+	if (lp >= 0) {
+		opt.lp = (uint32_t)lp;
+	}
+	if (pb >= 0) {
+		opt.pb = (uint32_t)pb;
+	}
+
+	/* The xz container format only supports LZMA2. */
+	if (format == XZ_FORMAT_XZ) {
+		filter_id = LZMA_FILTER_LZMA2;
+	}
+
+	lzma_filter filters[] = {
+		{ .id = (lzma_vli)filter_id, .options = &opt },
+		{ .id = LZMA_VLI_UNKNOWN,  .options = NULL },
+	};
+
+	lzma_ret ret;
+	if (format == XZ_FORMAT_RAW) {
+		ret = lzma_raw_encoder(&obj->strm, filters);
+	} else {
+		ret = lzma_stream_encoder(&obj->strm, filters, (lzma_check)check);
+	}
+
 	if (ret != LZMA_OK) {
 		zval_ptr_dtor(return_value);
 		RETURN_FALSE;
 	}
+
+	obj->format = (uint32_t)format;
+	obj->check = (lzma_check)check;
+	obj->opt = opt;
+	obj->filter.id = filters[0].id;
+	obj->filter.options = &obj->opt;
 	obj->status = LZMA_OK;
+}
+/* }}} */
+
+/* {{{ proto string xz_encode_get_properties(XZEncodeContext context)
+   Returns the LZMA properties for a raw compression context. */
+PHP_FUNCTION(xz_encode_get_properties)
+{
+	zval *context_zv;
+
+	ZEND_PARSE_PARAMETERS_START(1, 1)
+		Z_PARAM_OBJECT(context_zv)
+	ZEND_PARSE_PARAMETERS_END();
+
+	XZ_EXPECTED_OBJECT(context_zv, xz_encode_context_ce, "XZEncodeContext");
+
+	php_xz_encode_context_obj *obj = php_xz_encode_context_from_obj(Z_OBJ_P(context_zv));
+
+	if (obj->format != XZ_FORMAT_RAW) {
+		php_error_docref(NULL, E_WARNING, "properties are only available for raw (XZ_FORMAT_RAW) encoding contexts");
+		RETURN_FALSE;
+	}
+
+	uint32_t props_size;
+	if (lzma_properties_size(&props_size, &obj->filter) != LZMA_OK) {
+		RETURN_FALSE;
+	}
+
+	/* LZMA1 properties are 5 bytes, LZMA2 are 1 byte. */
+	uint8_t props[5];
+	if (lzma_properties_encode(&obj->filter, props) != LZMA_OK) {
+		RETURN_FALSE;
+	}
+
+	RETURN_STRINGL((const char *)props, props_size);
 }
 /* }}} */
 

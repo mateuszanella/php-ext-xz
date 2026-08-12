@@ -1,5 +1,5 @@
 --TEST--
-Incremental xz encode: error on invalid check and level. (PHP 8+)
+Incremental xz encode: error on invalid format, check and level. (PHP 8+)
 --SKIPIF--
 <?php
 if (!extension_loaded("xz")) {
@@ -18,7 +18,19 @@ try {
 }
 
 try {
-	xz_encode_init(XZ_CHECK_CRC64, ['level' => 100]);
+	xz_encode_init(XZ_FORMAT_XZ, ['level' => 100]);
+} catch (\ValueError $e) {
+	echo $e->getMessage() . \PHP_EOL;
+}
+
+try {
+	xz_encode_init(XZ_FORMAT_XZ, ['check' => 999]);
+} catch (\ValueError $e) {
+	echo $e->getMessage() . \PHP_EOL;
+}
+
+try {
+	xz_encode_init(XZ_FORMAT_RAW, ['filter' => 12345]);
 } catch (\ValueError $e) {
 	echo $e->getMessage() . \PHP_EOL;
 }
@@ -30,6 +42,8 @@ try {
 }
 ?>
 --EXPECT--
-xz_encode_init(): Argument #1 ($check) must be a valid XZ_CHECK_* constant
+xz_encode_init(): Argument #1 ($format) must be XZ_FORMAT_XZ or XZ_FORMAT_RAW
 xz_encode_init(): Argument #2 ($options) options['level'] must be between 0 and 9
+xz_encode_init(): Argument #2 ($options) options['check'] must be a valid XZ_CHECK_* constant
+xz_encode_init(): Argument #2 ($options) options['filter'] must be XZ_FILTER_LZMA1 or XZ_FILTER_LZMA2
 TypeError for wrong class
