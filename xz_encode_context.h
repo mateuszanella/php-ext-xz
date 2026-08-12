@@ -25,7 +25,7 @@
 
 typedef struct _php_xz_encode_context_obj {
 	lzma_stream strm;
-	int status;
+	lzma_ret status;
 	zend_object std;
 } php_xz_encode_context_obj;
 
