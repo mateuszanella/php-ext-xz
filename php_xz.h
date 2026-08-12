@@ -26,7 +26,7 @@
 
 #include <lzma.h>
 
-#define PHP_XZ_VERSION "3.0.0"
+#define PHP_XZ_VERSION "2.1.0"
 
 /* Compression container formats for the incremental encode/decode contexts. */
 #define XZ_FORMAT_XZ  0
