@@ -140,8 +140,11 @@ function xz_encode_finish(XZEncodeContext $context): string|false {}
  * call {@see xz_decode_finish()} only when using the {@see XZ_CONCATENATED}
  * flag to process multiple concatenated streams.
  *
- * @param int      $flags        A bitmask of decoder flags. {@see XZ_CONCATENATED}
- *                               enables processing of multiple concatenated xz
+ * @param int      $flags        A bitmask of decoder flags. {@see XZ_FAIL_FAST}
+ *                               reports errors immediately on corrupt data;
+ *                               {@see XZ_IGNORE_CHECK} skips integrity
+ *                               verification; {@see XZ_CONCATENATED} enables
+ *                               processing of multiple concatenated xz
  *                               streams. Use `0` for single-stream decoding.
  * @param int|null $memory_limit Maximum memory (in bytes) the decoder is
  *                               allowed to allocate, or 0 for unlimited.

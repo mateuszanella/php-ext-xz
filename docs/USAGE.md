@@ -389,6 +389,8 @@ Pass to `xz_decode_init()` as a bitmask.
 
 | Constant | Value | Description |
 |---|---|---|
+| `XZ_FAIL_FAST` | `32` | Report errors immediately on corrupt data instead of decompressing as much as possible first. |
+| `XZ_IGNORE_CHECK` | `16` | Skip integrity check verification during decompression. Useful for corrupted file recovery or when integrity is verified externally. |
 | `XZ_CONCATENATED` | `8` | Accept multiple concatenated xz streams. |
 
 ---
