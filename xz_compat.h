@@ -20,6 +20,18 @@
 #ifndef XZ_COMPAT_H
 #define XZ_COMPAT_H
 
+#ifndef LZMA_FAIL_FAST
+# define LZMA_FAIL_FAST 0x20
+#endif
+
+#ifndef LZMA_IGNORE_CHECK
+# define LZMA_IGNORE_CHECK 0x10
+#endif
+
+#ifndef LZMA_CONCATENATED
+# define LZMA_CONCATENATED 0x08
+#endif
+
 #if PHP_VERSION_ID < 80600
 # define zend_ini_long_literal(name) zend_ini_long((name), sizeof("" name) - 1, 0)
 #endif
