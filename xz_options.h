@@ -24,7 +24,7 @@
 
 /* Reads a long-valued option from an options HashTable. Returns 0 when the
  * option is absent, 1 when it was found (and stored in *value). */
-static inline int php_xz_opt_long(const HashTable *options, const char *key, zend_long *value)
+static inline int php_xz_opt_get_long(const HashTable *options, const char *key, zend_long *value)
 {
 	zval *zv = zend_hash_str_find(options, key, strlen(key));
 	if (zv == NULL) {

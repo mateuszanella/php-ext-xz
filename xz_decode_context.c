@@ -145,13 +145,13 @@ PHP_FUNCTION(xz_decode_init)
 	zend_long pb = -1;
 
 	if (options) {
-		php_xz_opt_long(options, "flags", &flags);
-		php_xz_opt_long(options, "memory_limit", &memory_limit);
-		php_xz_opt_long(options, "filter", &filter_id);
-		php_xz_opt_long(options, "dict_size", &dict_size);
-		php_xz_opt_long(options, "lc", &lc);
-		php_xz_opt_long(options, "lp", &lp);
-		php_xz_opt_long(options, "pb", &pb);
+		php_xz_opt_get_long(options, "flags", &flags);
+		php_xz_opt_get_long(options, "memory_limit", &memory_limit);
+		php_xz_opt_get_long(options, "filter", &filter_id);
+		php_xz_opt_get_long(options, "dict_size", &dict_size);
+		php_xz_opt_get_long(options, "lc", &lc);
+		php_xz_opt_get_long(options, "lp", &lp);
+		php_xz_opt_get_long(options, "pb", &pb);
 	}
 
 	if (filter_id != LZMA_FILTER_LZMA1 && filter_id != LZMA_FILTER_LZMA2) {

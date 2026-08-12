@@ -23,7 +23,6 @@
 #include "php.h"
 
 #include "xz_compat.h"
-#include "xz_internal.h"
 
 #include <lzma.h>
 

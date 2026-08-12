@@ -151,13 +151,13 @@ PHP_FUNCTION(xz_encode_init)
 	zend_long pb = -1;
 
 	if (options) {
-		php_xz_opt_long(options, "check", &check);
-		php_xz_opt_long(options, "level", &compression_level);
-		php_xz_opt_long(options, "filter", &filter_id);
-		php_xz_opt_long(options, "dict_size", &dict_size);
-		php_xz_opt_long(options, "lc", &lc);
-		php_xz_opt_long(options, "lp", &lp);
-		php_xz_opt_long(options, "pb", &pb);
+		php_xz_opt_get_long(options, "check", &check);
+		php_xz_opt_get_long(options, "level", &compression_level);
+		php_xz_opt_get_long(options, "filter", &filter_id);
+		php_xz_opt_get_long(options, "dict_size", &dict_size);
+		php_xz_opt_get_long(options, "lc", &lc);
+		php_xz_opt_get_long(options, "lp", &lp);
+		php_xz_opt_get_long(options, "pb", &pb);
 	}
 
 	if (compression_level < 0 || compression_level > 9) {
