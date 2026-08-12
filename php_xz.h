@@ -28,7 +28,7 @@
 
 #include <lzma.h>
 
-#define PHP_XZ_VERSION "1.2.0"
+#define PHP_XZ_VERSION "2.0.0"
 
 extern zend_module_entry xz_module_entry;
 extern php_stream_wrapper php_stream_xz_wrapper;

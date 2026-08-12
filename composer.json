@@ -1,40 +1,50 @@
 {
-	"$schema": "https://getcomposer.org/schema.json",
-	"name": "mateuszanella/php-ext-xz",
-	"description": "A PHP Extension providing xz (LZMA2) compression/decompression via PHP streams.",
-	"keywords": ["php-extension", "xz", "lzma2"],
-	"license": "PHP-3.01",
-	"type": "php-ext",
-	"php-ext": {
-		"extension-name": "xz",
-		"priority": 99
-	},
-	"authors": [
-		{
-			"name": "deniyuda348"
-		},
-		{
-			"name": "udan11",
-			"homepage": "https://github.com/udan11/php-xz"
-		},
-		{
-			"name": "smiley",
-			"email": "smiley@chillerlan.net",
-			"homepage": "https://github.com/codemasher/php-ext-xz"
-		},
-		{
-			"name": "mateuszanella",
-			"email": "mateusblk1@gmail.com",
-			"homepage": "https://github.com/mateuszanella"
-		},
-		{
-			"name": "Contributors",
-			"homepage":"https://github.com/mateuszanella/php-ext-xz/graphs/contributors"
-		}
-	],
-	"homepage": "https://github.com/mateuszanella/php-ext-xz",
-	"support": {
-		"issues": "https://github.com/mateuszanella/php-ext-xz/issues",
-		"source": "https://github.com/mateuszanella/php-ext-xz"
-	}
+  "$schema": "https://getcomposer.org/schema.json",
+  "name": "mateuszanella/php-ext-xz",
+  "description": "A PHP extension providing xz (LZMA2) compression and decompression, with support for one-shot encoding, incremental streaming, and file operations via stream wrapper.",
+  "keywords": [
+    "php-extension",
+    "php-ext",
+    "xz",
+    "lzma",
+    "lzma2",
+    "compression",
+    "decompression",
+    "streaming",
+    "stream-wrapper"
+  ],
+  "license": "PHP-3.01",
+  "type": "php-ext",
+  "php-ext": {
+    "extension-name": "xz",
+    "priority": 99
+  },
+  "authors": [
+    {
+      "name": "deniyuda348"
+    },
+    {
+      "name": "udan11",
+      "homepage": "https://github.com/udan11/php-xz"
+    },
+    {
+      "name": "smiley",
+      "email": "smiley@chillerlan.net",
+      "homepage": "https://github.com/codemasher/php-ext-xz"
+    },
+    {
+      "name": "mateuszanella",
+      "email": "mateusblk1@gmail.com",
+      "homepage": "https://github.com/mateuszanella"
+    },
+    {
+      "name": "Contributors",
+      "homepage": "https://github.com/mateuszanella/php-ext-xz/graphs/contributors"
+    }
+  ],
+  "homepage": "https://github.com/mateuszanella/php-ext-xz",
+  "support": {
+    "issues": "https://github.com/mateuszanella/php-ext-xz/issues",
+    "source": "https://github.com/mateuszanella/php-ext-xz"
+  }
 }
