@@ -27,7 +27,7 @@ You can also configure the default compression level and memory limit:
 
 ```ini
 
-; Default compression level. Affects `xzencode` and `xzopen`, 
+; Default compression level. Affects `xzencode` and `xzopen`,
 ; but only when the level was not specified. Default is 5.
 xz.compression_level=5
 

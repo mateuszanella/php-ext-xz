@@ -1,77 +1,81 @@
 # Usage
 
-This guide covers all features of the xz extension, from basic one-shot compression to
-incremental streaming and file operations.
+This extension provides xz (LZMA2) compression and decompression through
+one-shot functions, an incremental streaming API, and a stream wrapper for
+file operations.
 
-## One-shot compression
+## One-shot Functions
 
-For simple cases where all data is in memory, use `xzencode()` and `xzdecode()`. These
-are single-call functions that compress or decompress an entire string at once.
+### `xzencode`
 
-### Encoding
+Encodes a string with xz (LZMA2) compression.
+
+```php
+xzencode(string $str, ?int $compression_level = null): string|false
+```
+
+**Parameters**
+
+| Parameter            | Description                                                                                                                                                                                      |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `$str`               | The uncompressed input data.                                                                                                                                                                     |
+| `$compression_level` | Compression level (0–9). `null` or omitted uses the [`xz.compression_level`](#runtime-configuration) INI setting (default 5). Higher levels produce smaller output but use more time and memory. |
+
+**Return Values**
+
+Returns the xz-compressed string on success, or `false` on failure.
+
+**Examples**
 
 ```php
 $compressed = xzencode('Hello, World!');
-// $compressed is a binary xz-compressed string
 
-// With explicit compression level (0 = fastest, 9 = best compression):
-$compressed = xzencode('Hello, World!', 6);
-```
-
-| Parameter | Type | Description |
-|---|---|---|
-| `$str` | `string` | The uncompressed input data. |
-| `$compression_level` | `?int` | Level 0–9. When `null` or omitted, uses the `xz.compression_level` INI setting (default 5). |
-
-Returns `string` on success, `false` on failure.
-
-### Decoding
-
-```php
-$original = xzdecode($compressed);
-// $original === 'Hello, World!'
-```
-
-| Parameter | Type | Description |
-|---|---|---|
-| `$str` | `string` | The xz-compressed input data. Must not be empty. |
-
-Returns `string` on success, `false` on failure (e.g. invalid or corrupt input).
-
-### Example: roundtrip
-
-```php
-$data = 'Some data to compress';
-$compressed = xzencode($data);
-$restored = xzdecode($compressed);
-
-echo $data === $restored ? 'OK' : 'FAIL'; // OK
+// With explicit compression level
+$compressed = xzencode($data, 9);
 ```
 
 ---
 
-## Incremental compression
+### `xzdecode`
 
-When data is streamed or arrives in chunks — network sockets, large files, generator
-pipelines — use the incremental API. It mirrors PHP's `deflate_init()` / `deflate_add()`
-pattern from ext/zlib.
-
-### Encoding
+Decodes an xz (LZMA2) compressed string.
 
 ```php
-$ctx = xz_encode_init();                       // default: CRC64 check, INI compression level
-$out  = xz_encode_add($ctx, 'Hello, ');
-$out .= xz_encode_add($ctx, 'World!');
-$out .= xz_encode_finish($ctx);                // flush remaining output, finalize stream
-
-// $out is a complete xz-compressed string
-
-// Don't reuse $ctx — it's consumed after finish().
+xzdecode(string $str): string|false
 ```
 
-**Lifecycle:** `init` → `add`* (0 or more) → `finish` → done
+**Parameters**
 
-#### `xz_encode_init()`
+| Parameter | Description                                      |
+| --------- | ------------------------------------------------ |
+| `$str`    | The xz-compressed input data. Must not be empty. |
+
+**Return Values**
+
+Returns the decompressed string on success, or `false` on failure (e.g. invalid or corrupt input).
+
+**Examples**
+
+```php
+$original = xzdecode($compressed);
+```
+
+---
+
+## Incremental Compression
+
+When data is streamed or arrives in chunks, use the incremental API. It mirrors
+the `deflate_init()` / `deflate_add()` pattern from ext/zlib. Each context is
+single-use — it cannot be reused after finishing.
+
+### `XZEncodeContext` class
+
+An opaque object representing an incremental xz compression context.
+Created by `xz_encode_init()`, consumed by `xz_encode_finish()` and `xz_encode_add()`.
+
+### `xz_encode_init`
+
+Initializes an incremental xz compression context.
 
 ```php
 xz_encode_init(
@@ -80,56 +84,97 @@ xz_encode_init(
 ): XZEncodeContext|false
 ```
 
-| Parameter | Type | Description |
-|---|---|---|
-| `$check` | `int` | Integrity check type. One of `XZ_CHECK_NONE`, `XZ_CHECK_CRC32`, `XZ_CHECK_CRC64` (default), `XZ_CHECK_SHA256`. |
-| `$options` | `array` | Associative array. Supported key: `"level"` (int, 0–9). Defaults to `xz.compression_level` INI setting. |
+**Parameters**
+
+| Parameter  | Description                                                                                                                                                                                                                                     |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$check`   | Integrity check type embedded in the xz stream. One of [`XZ_CHECK_NONE`](#predefined-constants), [`XZ_CHECK_CRC32`](#predefined-constants), [`XZ_CHECK_CRC64`](#predefined-constants) (default), or [`XZ_CHECK_SHA256`](#predefined-constants). |
+| `$options` | Associative array of encoder options. Supported key: `"level"` (int, 0–9). Defaults to the [`xz.compression_level`](#runtime-configuration) INI setting.                                                                                        |
+
+**Return Values**
+
+Returns an `XZEncodeContext` object on success, or `false` on failure.
+PHP 8.0+ throws `\ValueError` for invalid arguments.
+
+**Examples**
 
 ```php
-// Examples
-$ctx = xz_encode_init();                                        // defaults: CRC64, level from INI
-$ctx = xz_encode_init(XZ_CHECK_SHA256);                         // SHA-256 integrity, INI level
-$ctx = xz_encode_init(XZ_CHECK_CRC64, ['level' => 3]);          // CRC64, fast compression
-$ctx = xz_encode_init(XZ_CHECK_CRC64, ['level' => 9]);          // CRC64, maximum compression
+$ctx = xz_encode_init();                                 // CRC64, level from INI
+$ctx = xz_encode_init(XZ_CHECK_SHA256);                  // SHA-256, level from INI
+$ctx = xz_encode_init(XZ_CHECK_CRC64, ['level' => 9]);   // CRC64, maximum compression
 ```
 
-Returns an `XZEncodeContext` object on success, `false` on failure (PHP 8+: throws
-`\ValueError` for invalid arguments).
+---
 
-#### `xz_encode_add()`
+### `xz_encode_add`
+
+Feeds uncompressed data into an incremental compression context.
 
 ```php
 xz_encode_add(XZEncodeContext $context, string $data): string|false
 ```
 
-Feeds uncompressed data into the encoder. Returns a compressed output chunk. After
-`finish()` has been called, further calls return `false` with a warning.
+**Parameters**
 
-#### `xz_encode_finish()`
+| Parameter  | Description                                    |
+| ---------- | ---------------------------------------------- |
+| `$context` | A compression context from `xz_encode_init()`. |
+| `$data`    | The uncompressed data chunk to compress.       |
+
+**Return Values**
+
+Returns the compressed output chunk on success. After `xz_encode_finish()` has
+been called, returns `false` with a warning.
+
+---
+
+### `xz_encode_finish`
+
+Finalizes an incremental compression stream.
 
 ```php
 xz_encode_finish(XZEncodeContext $context): string|false
 ```
 
-Flushes any buffered data and writes the stream footer. Returns the final compressed
-bytes. The context must not be used after this call.
+**Parameters**
 
-### Decoding
+| Parameter  | Description                                    |
+| ---------- | ---------------------------------------------- |
+| `$context` | A compression context from `xz_encode_init()`. |
 
-```php
-$ctx = xz_decode_init();
-$decoded  = xz_decode_add($ctx, $compressedChunk1);
-$decoded .= xz_decode_add($ctx, $compressedChunk2);
-// The decoder auto-finishes at end of stream — no finish() call needed for single streams.
-$decoded .= xz_decode_finish($ctx);  // silent no-op here, but safe to call
+**Return Values**
 
-$status = xz_decode_get_status($ctx);     // 1 (stream finished)
-$consumed = xz_decode_get_read_len($ctx); // bytes consumed from compressed input
+Returns the remaining compressed bytes on success. Returns `false` with a
+warning if the context was already finished.
+
+---
+
+### Encode lifecycle
+
+```
+init → add* (zero or more) → finish → done
 ```
 
-**Lifecycle:** `init` → `add`* (0 or more, auto-ends at stream end) → optional `finish` → done
+```php
+$ctx = xz_encode_init();
+$out  = xz_encode_add($ctx, 'Hello, ');
+$out .= xz_encode_add($ctx, 'World!');
+$out .= xz_encode_finish($ctx);
+```
 
-#### `xz_decode_init()`
+---
+
+## Incremental Decompression
+
+### `XZDecodeContext` class
+
+An opaque object representing an incremental xz decompression context.
+Created by `xz_decode_init()`. Single-stream decoders auto-finish —
+`xz_decode_finish()` is only required with the `XZ_CONCATENATED` flag.
+
+### `xz_decode_init`
+
+Initializes an incremental xz decompression context.
 
 ```php
 xz_decode_init(
@@ -138,269 +183,254 @@ xz_decode_init(
 ): XZDecodeContext|false
 ```
 
-| Parameter | Type | Description |
-|---|---|---|
-| `$flags` | `int` | Bitmask of decoder flags. `0` for single-stream or `XZ_CONCATENATED` for multi-stream input. |
-| `$memory_limit` | `int` | Maximum memory in bytes the decoder may allocate, or `0` for unlimited. Defaults to `xz.max_memory` INI setting if omitted. |
+**Parameters**
+
+| Parameter       | Description                                                                                                                                                                                                                                          |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$flags`        | Bitmask of [decoder flags](#predefined-constants). `0` for single-stream decoding. Use `XZ_CONCATENATED` for multiple concatenated streams, `XZ_FAIL_FAST` to stop immediately on corrupt data, or `XZ_IGNORE_CHECK` to skip integrity verification. |
+| `$memory_limit` | Maximum memory (in bytes) the decoder may allocate. `0` means unlimited. Defaults to the [`xz.max_memory`](#runtime-configuration) INI setting.                                                                                                      |
+
+**Return Values**
+
+Returns an `XZDecodeContext` object on success, or `false` on failure.
+
+**Examples**
 
 ```php
-// Examples
-$ctx = xz_decode_init();                               // single stream, unlimited memory
-$ctx = xz_decode_init(XZ_CONCATENATED);                // support multiple concatenated .xz streams
-$ctx = xz_decode_init(0, 64 * 1024 * 1024);            // single stream, 64 MB memory limit
+$ctx = xz_decode_init();                                  // single stream, unlimited memory
+$ctx = xz_decode_init(XZ_CONCATENATED);                   // concatenated streams
+$ctx = xz_decode_init(XZ_FAIL_FAST, 64 * 1024 * 1024);    // fail fast, 64 MB limit
+$ctx = xz_decode_init(XZ_IGNORE_CHECK | XZ_CONCATENATED); // combined flags
 ```
 
-Returns an `XZDecodeContext` object on success, `false` on failure.
+---
 
-#### `xz_decode_add()`
+### `xz_decode_add`
+
+Feeds compressed data into an incremental decompression context.
 
 ```php
 xz_decode_add(XZDecodeContext $context, string $data): string|false
 ```
 
-Feeds compressed data into the decoder. Returns a decompressed output chunk. The
-decoder may buffer data internally until a complete block is available. After
-the stream ends (status 1), further calls return `false` with a warning.
+**Parameters**
 
-#### `xz_decode_finish()`
+| Parameter  | Description                                      |
+| ---------- | ------------------------------------------------ |
+| `$context` | A decompression context from `xz_decode_init()`. |
+| `$data`    | The compressed xz data chunk to decompress.      |
+
+**Return Values**
+
+Returns the decompressed output on success. Returns `false` with a warning
+if the context has already finished or the data is corrupt.
+
+---
+
+### `xz_decode_finish`
+
+Finalizes an incremental decompression stream.
 
 ```php
 xz_decode_finish(XZDecodeContext $context): string|false
 ```
 
-Signals that no more compressed data follows. For single-stream input, this is a
-silent no-op (the decoder has already auto-finished). For concatenated streams
-(`XZ_CONCATENATED` flag), this ensures the last stream is properly terminated.
+**Parameters**
 
-#### `xz_decode_get_status()`
+| Parameter  | Description                                      |
+| ---------- | ------------------------------------------------ |
+| `$context` | A decompression context from `xz_decode_init()`. |
+
+**Return Values**
+
+For single-stream input, returns an empty string (the decoder auto-finishes).
+For concatenated streams (`XZ_CONCATENATED`), returns any remaining output.
+Returns `false` on error.
+
+---
+
+### `xz_decode_get_status`
+
+Returns the current status of a decompression context.
 
 ```php
 xz_decode_get_status(XZDecodeContext $context): int|false
 ```
 
-Returns the last lzma status code:
+**Parameters**
+
+| Parameter  | Description                                      |
+| ---------- | ------------------------------------------------ |
+| `$context` | A decompression context from `xz_decode_init()`. |
+
+**Return Values**
+
+Returns the last lzma status code as an integer:
+
 - `0` — ready for more data
 - `1` — stream finished successfully
 - `9` — data is corrupt
 
-#### `xz_decode_get_read_len()`
+> Values match `LZMA_STATUS_*` constants. See LZMA documentation for details.
+
+> TODO: Theese values could be documented and set as PHP constants.
+
+Returns `false` if the context is invalid.
+
+---
+
+### `xz_decode_get_read_len`
+
+Returns the number of compressed bytes consumed by the decoder.
 
 ```php
 xz_decode_get_read_len(XZDecodeContext $context): int|false
 ```
 
-Returns the total number of compressed bytes consumed by the decoder so far. Useful
-for detecting where the compressed stream ends when the input contains trailing data.
+**Parameters**
 
-### Real-world pattern: wrapper class
+| Parameter  | Description                                      |
+| ---------- | ------------------------------------------------ |
+| `$context` | A decompression context from `xz_decode_init()`. |
 
-```php
-class XzCompressor
-{
-    private XZEncodeContext $ctx;
+**Return Values**
 
-    public function __construct(int $level = 6)
-    {
-        $this->ctx = xz_encode_init(XZ_CHECK_CRC64, ['level' => $level]);
-        if ($this->ctx === false) {
-            throw new \RuntimeException('Failed to initialize xz compression context');
-        }
-    }
+Returns the total bytes consumed from the compressed input. Useful for
+detecting where the xz stream ends when the input contains trailing data.
+Returns `false` if the context is invalid.
 
-    public function compress(string $data): string
-    {
-        $result = xz_encode_add($this->ctx, $data);
-        if ($result === false) {
-            throw new \RuntimeException('Failed to compress data');
-        }
-        return $result;
-    }
+---
 
-    public function finish(): string
-    {
-        $result = xz_encode_finish($this->ctx);
-        if ($result === false) {
-            throw new \RuntimeException('Failed to finish compression');
-        }
-        return $result;
-    }
-}
+### Decode lifecycle
+
+```
+init → add* (zero or more, auto-ends at stream end) → optional finish → done
 ```
 
 ```php
-class XzDecompressor
-{
-    private XZDecodeContext $ctx;
+$ctx = xz_decode_init();
+$decoded  = xz_decode_add($ctx, $chunk1);
+$decoded .= xz_decode_add($ctx, $chunk2);
 
-    public function __construct(int $flags = 0, int $memoryLimit = 0)
-    {
-        $this->ctx = xz_decode_init($flags, $memoryLimit);
-        if ($this->ctx === false) {
-            throw new \RuntimeException('Failed to initialize xz decompression context');
-        }
-    }
-
-    public function decompress(string $data): string
-    {
-        $result = xz_decode_add($this->ctx, $data);
-        if ($result === false) {
-            throw new \RuntimeException('Failed to decompress data');
-        }
-        return $result;
-    }
-
-    public function finish(): string
-    {
-        $result = xz_decode_finish($this->ctx);
-        if ($result === false) {
-            throw new \RuntimeException('Failed to finish decompression');
-        }
-        return $result;
-    }
-
-    public function isDone(): bool
-    {
-        return xz_decode_get_status($this->ctx) === 1;
-    }
-}
-```
-
-### Example: streaming large files
-
-```php
-// Compress a large file in chunks
-function compressFile(string $inputPath, string $outputPath, int $level = 5): void
-{
-    $in = fopen($inputPath, 'rb');
-    $out = fopen($outputPath, 'wb');
-    $ctx = xz_encode_init(XZ_CHECK_CRC64, ['level' => $level]);
-
-    while (!feof($in)) {
-        $chunk = fread($in, 8192);
-        if ($chunk === false) {
-            break;
-        }
-        fwrite($out, xz_encode_add($ctx, $chunk));
-    }
-    fwrite($out, xz_encode_finish($ctx));
-
-    fclose($in);
-    fclose($out);
-}
-
-// Decompress a large file in chunks
-function decompressFile(string $inputPath, string $outputPath): void
-{
-    $in = fopen($inputPath, 'rb');
-    $out = fopen($outputPath, 'wb');
-    $ctx = xz_decode_init();
-
-    while (!feof($in)) {
-        $chunk = fread($in, 8192);
-        if ($chunk === false) {
-            break;
-        }
-        fwrite($out, xz_decode_add($ctx, $chunk));
-    }
-    fwrite($out, xz_decode_finish($ctx));
-
-    fclose($in);
-    fclose($out);
-}
+$status = xz_decode_get_status($ctx);      // 1 when finished
+$bytes  = xz_decode_get_read_len($ctx);    // compressed bytes consumed
 ```
 
 ---
 
-## Stream wrapper
+## Stream Wrapper Functions
 
-The extension registers the `compress.lzma` stream wrapper for transparent xz
-compression on file operations. The `xzopen()` / `xzwrite()` / `xzread()` /
-`xzclose()` / `xzpassthru()` functions provide a low-level interface.
+The extension registers the `compress.lzma` stream wrapper for transparent
+xz compression on file operations. The following functions mirror the standard
+`fopen()` / `fwrite()` / `fread()` / `fclose()` / `fpassthru()` API.
 
-### Writing
+### `xzopen`
+
+Opens an xz-compressed file for reading or writing.
 
 ```php
-$fp = xzopen('/path/to/archive.xz', 'w');   // 'w' = write, 'wb' = binary write
-xzwrite($fp, 'Data to store in the archive');
-xzwrite($fp, 'More data');
-xzclose($fp);
+xzopen(string $filename, string $mode, int $compression_level = ?): resource|false
 ```
 
-### Reading
+| Parameter            | Description                                                                                            |
+| -------------------- | ------------------------------------------------------------------------------------------------------ |
+| `$filename`          | The file path.                                                                                         |
+| `$mode`              | `"r"`, `"w"`, `"rb"`, or `"wb"`.                                                                       |
+| `$compression_level` | Compression level (0–9) for write modes. Defaults to [`xz.compression_level`](#runtime-configuration). |
+
+**Return Values**
+
+Returns a file pointer resource on success, or `false` on failure.
+
+### `xzread`
+
+Reads from an xz-compressed file stream. Alias of `fread()`.
 
 ```php
-$fp = xzopen('/path/to/archive.xz', 'r');
-while (!feof($fp)) {
-    echo xzread($fp, 4096);
-}
-xzclose($fp);
+xzread(resource $fp, ?int $length = null): string|false
 ```
 
+### `xzwrite`
+
+Writes to an xz-compressed file stream. Alias of `fwrite()`.
+
 ```php
-$fp = xzopen('/path/to/archive.xz', 'r');
-xzpassthru($fp);   // reads entire file and sends it to output buffer
-xzclose($fp);
+xzwrite(resource $fp, string $str, ?int $length = null): int|false
 ```
 
-### Mode strings
+### `xzclose`
 
-| Mode | Description |
-|---|---|
-| `"r"` | Open for reading. |
-| `"w"` | Open for writing (compression). |
-| `"rb"` | Open for reading (binary mode). |
-| `"wb"` | Open for writing (binary mode). |
-
-### Writing with custom compression level
+Closes an xz-compressed file stream. Alias of `fclose()`.
 
 ```php
-// 4th argument sets compression level
-$fp = xzopen('/path/to/archive.xz', 'w', 9);
-xzwrite($fp, 'Highly compressed data');
+xzclose(resource $fp): bool
+```
+
+### `xzpassthru`
+
+Reads to EOF and writes to the output buffer. Alias of `fpassthru()`.
+
+```php
+xzpassthru(resource $fp): int|false
+```
+
+**Examples**
+
+```php
+// Writing
+$fp = xzopen('/tmp/archive.xz', 'w');
+xzwrite($fp, 'Data to compress');
+xzclose($fp);
+
+// Reading
+$fp = xzopen('/tmp/archive.xz', 'r');
+echo xzread($fp, 4096);
 xzclose($fp);
 ```
 
 ---
 
-## Constants reference
-
-`xz_get_status()` returns raw lzma status integers. Common values:
-
-| Value | Meaning |
-|---|---|
-| `0` | Operation succeeded. Ready for more data. |
-| `1` | End of stream reached. |
-| `9` | Data is corrupt. |
+## Predefined Constants
 
 ### Check types
 
-Pass to `xz_encode_init()` to select the integrity check embedded in the xz stream.
+Pass to `xz_encode_init()`.
 
-| Constant | Value | Description |
-|---|---|---|
-| `XZ_CHECK_NONE` | `0` | No integrity check. |
-| `XZ_CHECK_CRC32` | `1` | CRC-32 (fast, 4 bytes). |
-| `XZ_CHECK_CRC64` | `4` | CRC-64 (default, 8 bytes). |
-| `XZ_CHECK_SHA256` | `10` | SHA-256 (slowest, 32 bytes). |
+| Constant          | Description                  |
+| ----------------- | ---------------------------- |
+| `XZ_CHECK_NONE`   | No integrity check.          |
+| `XZ_CHECK_CRC32`  | CRC-32 (fast, 4 bytes).      |
+| `XZ_CHECK_CRC64`  | CRC-64 (default, 8 bytes).   |
+| `XZ_CHECK_SHA256` | SHA-256 (slowest, 32 bytes). |
 
 ### Decoder flags
 
 Pass to `xz_decode_init()` as a bitmask.
 
-| Constant | Value | Description |
-|---|---|---|
-| `XZ_FAIL_FAST` | `32` | Report errors immediately on corrupt data instead of decompressing as much as possible first. |
-| `XZ_IGNORE_CHECK` | `16` | Skip integrity check verification during decompression. Useful for corrupted file recovery or when integrity is verified externally. |
-| `XZ_CONCATENATED` | `8` | Accept multiple concatenated xz streams. |
+| Constant          | Description                                |
+| ----------------- | ------------------------------------------ |
+| `XZ_FAIL_FAST`    | Report errors immediately on corrupt data. |
+| `XZ_IGNORE_CHECK` | Skip integrity check verification.         |
+| `XZ_CONCATENATED` | Accept multiple concatenated xz streams.   |
+
+### Status codes
+
+Returned by `xz_decode_get_status()`.
+
+| Value | Description            |
+| ----- | ---------------------- |
+| `0`   | Ready for more data.   |
+| `1`   | End of stream reached. |
+| `9`   | Data is corrupt.       |
 
 ---
 
-## INI settings
+## Runtime Configuration
 
-| Setting | Default | Description |
-|---|---|---|
-| `xz.compression_level` | `5` | Default compression level for `xzencode()` and `xz_encode_init()` when the level is not explicitly provided. Range: 0–9. |
-| `xz.max_memory` | `0` (unlimited) | Maximum memory (in bytes) the decoder may allocate. Used by `xz_decode_init()` when `$memory_limit` is omitted. |
+| INI setting            | Default         | Description                                                                                                        |
+| ---------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `xz.compression_level` | `5`             | Default compression level (0–9) for `xzencode()` and `xz_encode_init()` when the level is not explicitly provided. |
+| `xz.max_memory`        | `0` (unlimited) | Maximum memory (in bytes) the decoder may allocate. Used by `xz_decode_init()` when `$memory_limit` is omitted.    |
 
 ```ini
 ; php.ini
@@ -410,29 +440,15 @@ xz.max_memory = 134217728  ; 128 MB
 
 ---
 
-## Error handling
+## Error Handling
 
-### PHP 8.0+
+| PHP Version | Invalid argument                     | I/O or lzma failure |
+| ----------- | ------------------------------------ | ------------------- |
+| 8.0+        | Throws `\ValueError` or `\TypeError` | Returns `false`     |
+| 7.x         | `E_WARNING` + returns `false`        | Returns `false`     |
 
-Invalid arguments throw exceptions:
-
-| Condition | Exception |
-|---|---|
-| Invalid check type in `xz_encode_init()` | `\ValueError` |
-| Invalid level in `xz_encode_init()` | `\ValueError` |
-| Wrong object type passed to `add()` | `\TypeError` |
-| I/O or lzma operation failure | Returns `false` |
-
-### PHP 7.x
-
-Same conditions trigger `E_WARNING` and return `false`.
-
-### Context lifecycle
-
-| Context state | `add()` behavior | `finish()` behavior |
-|---|---|---|
-| Active (`0`) | Processes data, returns output | Finalizes, returns trailing output |
-| Finished (`1`) | Encode: returns `false` + warning<br>Decode: returns `false` + warning | Encode: returns `false` + warning<br>Decode: returns `""` (silent no-op) |
-
-The decode `finish()` is intentionally silent because single-stream decoders
-auto-finish — calling `finish()` defensively shouldn't raise warnings.
+Contexts are single-use. After calling `xz_encode_finish()`, further calls to
+`xz_encode_add()` or `xz_encode_finish()` return `false` with a warning.
+After a decode context reaches end-of-stream (status `1`), further calls to
+`xz_decode_add()` return `false` with a warning, while `xz_decode_finish()`
+returns an empty string (silent no-op).
