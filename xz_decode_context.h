@@ -17,37 +17,32 @@
 	+----------------------------------------------------------------------+
 */
 
-#ifndef PHP_XZ_H
-# define PHP_XZ_H
-
-#include "php.h"
-
-#define XZ_BUFFER_SIZE 4096
-
-#include "xz_compat.h"
+#ifndef PHP_XZ_DECODE_CONTEXT_H
+#define PHP_XZ_DECODE_CONTEXT_H
 
 #include <lzma.h>
+#include "php_xz.h"
 
-#define PHP_XZ_VERSION "1.2.0"
+typedef struct _php_xz_decode_context_obj {
+	lzma_stream strm;
+	lzma_ret status;
+	zend_object std;
+} php_xz_decode_context_obj;
 
-extern zend_module_entry xz_module_entry;
-extern php_stream_wrapper php_stream_xz_wrapper;
+static inline php_xz_decode_context_obj *php_xz_decode_context_from_obj(zend_object *obj)
+{
+	return (php_xz_decode_context_obj *)((char *)obj - XtOffsetOf(php_xz_decode_context_obj, std));
+}
 
-extern zend_class_entry *xz_encode_context_ce;
 extern zend_class_entry *xz_decode_context_ce;
 
-# define phpext_xz_ptr &xz_module_entry
+void php_xz_decode_context_register_handlers(void);
+zend_object *php_xz_decode_context_create_obj(zend_class_entry *class_type);
 
-#ifdef PHP_WIN32
-#	define PHP_XZ_API __declspec(dllexport)
-#elif defined(__GNUC__) && (__GNUC__ >= 4)
-#	define PHP_XZ_API __attribute__ ((visibility("default")))
-#else
-#	define PHP_XZ_API
-#endif
+PHP_FUNCTION(xz_decode_init);
+PHP_FUNCTION(xz_decode_add);
+PHP_FUNCTION(xz_decode_finish);
+PHP_FUNCTION(xz_decode_get_status);
+PHP_FUNCTION(xz_decode_get_read_len);
 
-#ifdef ZTS
-#	include "TSRM.h"
-#endif
-
-#endif	/* PHP_XZ_H */
+#endif /* PHP_XZ_DECODE_CONTEXT_H */

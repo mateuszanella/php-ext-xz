@@ -32,6 +32,8 @@
 #include "xz_decode.h"
 #include "xz_compat.h"
 #include "xz_fopen_wrapper.h"
+#include "xz_encode_context.h"
+#include "xz_decode_context.h"
 
 #if PHP_VERSION_ID >= 80000
 # include "xz_arginfo.h"
@@ -49,8 +51,35 @@ PHP_INI_END()
 /* {{{ MINIT */
 PHP_MINIT_FUNCTION(xz)
 {
+	zend_class_entry tmp_ce;
+
 	REGISTER_INI_ENTRIES();
+
+	php_xz_encode_context_register_handlers();
+	INIT_CLASS_ENTRY(tmp_ce, "XZEncodeContext", NULL);
+	xz_encode_context_ce = zend_register_internal_class(&tmp_ce);
+	xz_encode_context_ce->create_object = php_xz_encode_context_create_obj;
+	xz_encode_context_ce->ce_flags |= ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES | ZEND_ACC_NOT_SERIALIZABLE;
+
+	php_xz_decode_context_register_handlers();
+	INIT_CLASS_ENTRY(tmp_ce, "XZDecodeContext", NULL);
+	xz_decode_context_ce = zend_register_internal_class(&tmp_ce);
+	xz_decode_context_ce->create_object = php_xz_decode_context_create_obj;
+	xz_decode_context_ce->ce_flags |= ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES | ZEND_ACC_NOT_SERIALIZABLE;
+
 	php_register_url_stream_wrapper("compress.lzma", &php_stream_xz_wrapper);
+
+	// Encode integrity check types. See xz_encode_init
+	REGISTER_LONG_CONSTANT("XZ_CHECK_NONE", LZMA_CHECK_NONE, CONST_CS | CONST_PERSISTENT);
+	REGISTER_LONG_CONSTANT("XZ_CHECK_CRC32", LZMA_CHECK_CRC32, CONST_CS | CONST_PERSISTENT);
+	REGISTER_LONG_CONSTANT("XZ_CHECK_CRC64", LZMA_CHECK_CRC64, CONST_CS | CONST_PERSISTENT);
+	REGISTER_LONG_CONSTANT("XZ_CHECK_SHA256", LZMA_CHECK_SHA256, CONST_CS | CONST_PERSISTENT);
+
+	// Decode context flags. See xz_decode_init
+	REGISTER_LONG_CONSTANT("XZ_CONCATENATED", LZMA_CONCATENATED, CONST_CS | CONST_PERSISTENT);
+	REGISTER_LONG_CONSTANT("XZ_FAIL_FAST", LZMA_FAIL_FAST, CONST_CS | CONST_PERSISTENT);
+	REGISTER_LONG_CONSTANT("XZ_IGNORE_CHECK", LZMA_IGNORE_CHECK, CONST_CS | CONST_PERSISTENT);
+
 	return SUCCESS;
 }
 /* }}} */
@@ -127,13 +156,7 @@ PHP_FUNCTION(xzencode)
 	ZEND_PARSE_PARAMETERS_END();
 
 	if (compression_level < 0 || compression_level > 9) {
-#if PHP_VERSION_ID >= 80000
-		zend_argument_value_error(2, "must be between 0 and 9");
-		RETURN_THROWS();
-#else
-		php_error_docref(NULL, E_WARNING, "compression level must be between 0 and 9");
-		RETURN_FALSE;
-#endif
+		XZ_VALUE_ERROR(2, "must be between 0 and 9", "compression level must be between 0 and 9");
 	}
 
 	zend_string *out = php_xz_encode_string((const uint8_t *)in, in_len, (uint32_t)compression_level);

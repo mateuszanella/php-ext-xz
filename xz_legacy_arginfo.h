@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 66a217b3ff195bfd290132e29a53db417487c8db */
+ * Stub hash: ddc65d67fc6180cb9c5f00f526ba2bd3a0b46292 */
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_xzread, 0, 0, 1)
 	ZEND_ARG_INFO(0, fp)
@@ -33,6 +33,33 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_xzopen, 0, 0, 2)
 	ZEND_ARG_INFO(0, compression_level)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_xz_encode_init, 0, 0, 0)
+	ZEND_ARG_INFO(0, check)
+	ZEND_ARG_INFO(0, options)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_xz_encode_add, 0, 0, 2)
+	ZEND_ARG_INFO(0, context)
+	ZEND_ARG_INFO(0, data)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_xz_encode_finish, 0, 0, 1)
+	ZEND_ARG_INFO(0, context)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_xz_decode_init, 0, 0, 0)
+	ZEND_ARG_INFO(0, flags)
+	ZEND_ARG_INFO(0, memory_limit)
+ZEND_END_ARG_INFO()
+
+#define arginfo_xz_decode_add arginfo_xz_encode_add
+
+#define arginfo_xz_decode_finish arginfo_xz_encode_finish
+
+#define arginfo_xz_decode_get_status arginfo_xz_encode_finish
+
+#define arginfo_xz_decode_get_read_len arginfo_xz_encode_finish
+
 ZEND_FUNCTION(fread);
 ZEND_FUNCTION(fwrite);
 ZEND_FUNCTION(fclose);
@@ -40,6 +67,14 @@ ZEND_FUNCTION(fpassthru);
 ZEND_FUNCTION(xzencode);
 ZEND_FUNCTION(xzdecode);
 ZEND_FUNCTION(xzopen);
+ZEND_FUNCTION(xz_encode_init);
+ZEND_FUNCTION(xz_encode_add);
+ZEND_FUNCTION(xz_encode_finish);
+ZEND_FUNCTION(xz_decode_init);
+ZEND_FUNCTION(xz_decode_add);
+ZEND_FUNCTION(xz_decode_finish);
+ZEND_FUNCTION(xz_decode_get_status);
+ZEND_FUNCTION(xz_decode_get_read_len);
 
 static const zend_function_entry ext_functions[] = {
 #if (PHP_VERSION_ID >= 80400)
@@ -65,5 +100,13 @@ static const zend_function_entry ext_functions[] = {
 	ZEND_FE(xzencode, arginfo_xzencode)
 	ZEND_FE(xzdecode, arginfo_xzdecode)
 	ZEND_FE(xzopen, arginfo_xzopen)
+	ZEND_FE(xz_encode_init, arginfo_xz_encode_init)
+	ZEND_FE(xz_encode_add, arginfo_xz_encode_add)
+	ZEND_FE(xz_encode_finish, arginfo_xz_encode_finish)
+	ZEND_FE(xz_decode_init, arginfo_xz_decode_init)
+	ZEND_FE(xz_decode_add, arginfo_xz_decode_add)
+	ZEND_FE(xz_decode_finish, arginfo_xz_decode_finish)
+	ZEND_FE(xz_decode_get_status, arginfo_xz_decode_get_status)
+	ZEND_FE(xz_decode_get_read_len, arginfo_xz_decode_get_read_len)
 	ZEND_FE_END
 };
