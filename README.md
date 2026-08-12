@@ -53,6 +53,12 @@ $compressed = xzencode($originalString);
 
 // Decompress a string
 $decompressed = xzdecode($compressed);
+
+// With explicit level and format (raw LZMA2 stream, no container)
+$raw = xzencode($originalString, 6, XZ_FORMAT_RAW);
+
+// With an explicit decoder memory limit
+$decompressed = xzdecode($compressed, 64 * 1024 * 1024);
 ```
 
 ### File-based operations

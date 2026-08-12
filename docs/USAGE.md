@@ -8,22 +8,23 @@ file operations.
 
 ### `xzencode`
 
-Encodes a string with xz (LZMA2) compression.
+Encodes a string with xz (LZMA2) compression, or a bare raw LZMA2 stream.
 
 ```php
-xzencode(string $str, ?int $compression_level = null): string|false
+xzencode(string $data, int $level = -1, int $format = XZ_FORMAT_XZ): string|false
 ```
 
 **Parameters**
 
-| Parameter            | Description                                                                                                                                                                                      |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `$str`               | The uncompressed input data.                                                                                                                                                                     |
-| `$compression_level` | Compression level (0–9). `null` or omitted uses the [`xz.compression_level`](#runtime-configuration) INI setting (default 5). Higher levels produce smaller output but use more time and memory. |
+| Parameter | Description                                                                                                                                                                                  |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$data`   | The uncompressed input data.                                                                                                                                                                 |
+| `$level`  | Compression level (`-1` or 0–9). `-1` or omitted uses the [`xz.compression_level`](#runtime-configuration) INI setting (default 5). Higher levels produce smaller output but use more time and memory. |
+| `$format` | The container format. [`XZ_FORMAT_XZ`](#predefined-constants) (default) produces a self-contained xz stream; [`XZ_FORMAT_RAW`](#predefined-constants) produces a bare LZMA2 stream with no container. For full codec control (LZMA1, dictionary size, `lc`/`lp`/`pb`), use [`xz_encode_init()`](#xz_encode_init). |
 
 **Return Values**
 
-Returns the xz-compressed string on success, or `false` on failure.
+Returns the compressed string on success, or `false` on failure.
 
 **Examples**
 
@@ -32,6 +33,9 @@ $compressed = xzencode('Hello, World!');
 
 // With explicit compression level
 $compressed = xzencode($data, 9);
+
+// As a raw LZMA2 stream
+$raw = xzencode($data, -1, XZ_FORMAT_RAW);
 ```
 
 ---
@@ -41,14 +45,15 @@ $compressed = xzencode($data, 9);
 Decodes an xz (LZMA2) compressed string.
 
 ```php
-xzdecode(string $str): string|false
+xzdecode(string $data, int $memory_limit = -1): string|false
 ```
 
 **Parameters**
 
-| Parameter | Description                                      |
-| --------- | ------------------------------------------------ |
-| `$str`    | The xz-compressed input data. Must not be empty. |
+| Parameter      | Description                                                                                                                                                                       |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$data`        | The xz-compressed input data. Must not be empty.                                                                                                                                   |
+| `$memory_limit` | Maximum memory (in bytes) the decoder may allocate. `0` means unlimited; `-1` or omitted uses the [`xz.max_memory`](#runtime-configuration) INI setting.                          |
 
 **Return Values**
 
@@ -58,6 +63,9 @@ Returns the decompressed string on success, or `false` on failure (e.g. invalid 
 
 ```php
 $original = xzdecode($compressed);
+
+// With an explicit memory limit
+$original = xzdecode($compressed, 64 * 1024 * 1024);
 ```
 
 ---
@@ -487,7 +495,7 @@ Returned by `xz_decode_get_status()`.
 | INI setting            | Default         | Description                                                                                                        |
 | ---------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `xz.compression_level` | `5`             | Default compression level (0–9) for `xzencode()` and `xz_encode_init()` when the level is not explicitly provided. |
-| `xz.max_memory`        | `0` (unlimited) | Maximum memory (in bytes) the decoder may allocate. Used by `xz_decode_init()` when `$memory_limit` is omitted.    |
+| `xz.max_memory`        | `0` (unlimited) | Maximum memory (in bytes) the decoder may allocate. Used by `xzdecode()` and `xz_decode_init()` when no explicit limit is given. |
 
 ```ini
 ; php.ini

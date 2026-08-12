@@ -53,25 +53,31 @@ function xzclose(resource $fp): bool {}
 function xzpassthru(resource $fp): int|false {}
 
 /**
- * Encodes a string with xz (LZMA2) compression.
+ * Encodes a string with xz or raw LZMA2 compression.
  *
- * @param string   $str               The uncompressed input data.
- * @param int|null $compression_level Compression level (0 &ndash; 9). If null,
- *                                    uses the `xz.compression_level` INI setting
- *                                    (default is 5). Higher levels produce
- *                                    smaller output but take more time and memory.
- * @return string|false The xz-compressed data, or false on failure.
+ * @param string $data   The uncompressed input data.
+ * @param int    $level  Compression level (&minus;1 or 0 &ndash; 9). &minus;1
+ *                       (default) uses the `xz.compression_level` INI setting
+ *                       (default is 5). Higher levels produce smaller output
+ *                       but take more time and memory.
+ * @param int    $format The container format. One of {@see XZ_FORMAT_XZ}
+ *                       (default) or {@see XZ_FORMAT_RAW}. The raw format
+ *                       produces a bare LZMA2 stream with no container.
+ * @return string|false The compressed data, or false on failure.
  */
-function xzencode(string $str, ?int $compression_level = null): string|false {}
+function xzencode(string $data, int $level = -1, int $format = XZ_FORMAT_XZ): string|false {}
 
 /**
  * Decodes an xz (LZMA2) compressed string.
  *
- * @param string $str The xz-compressed input data. Must not be empty.
+ * @param string $data         The xz-compressed input data. Must not be empty.
+ * @param int    $memory_limit Maximum memory (in bytes) the decoder is allowed
+ *                             to allocate. `0` means unlimited; &minus;1
+ *                             (default) uses the `xz.max_memory` INI setting.
  * @return string|false The decompressed data, or false on failure (e.g.
  *                      invalid or corrupt input).
  */
-function xzdecode(string $str): string|false {}
+function xzdecode(string $data, int $memory_limit = -1): string|false {}
 
 /**
  * Opens an xz-compressed file for reading or writing.

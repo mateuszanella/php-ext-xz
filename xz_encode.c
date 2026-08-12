@@ -22,7 +22,7 @@
 #include <lzma.h>
 #include "php.h"
 
-zend_string *php_xz_encode_string(const uint8_t *data, size_t data_len, uint32_t level)
+zend_string *php_xz_encode_string(const uint8_t *data, size_t data_len, uint32_t level, uint32_t format)
 {
 	lzma_options_lzma opt;
 	if (lzma_lzma_preset(&opt, level)) {
@@ -35,7 +35,10 @@ zend_string *php_xz_encode_string(const uint8_t *data, size_t data_len, uint32_t
 	};
 
 	lzma_stream strm = LZMA_STREAM_INIT;
-	if (lzma_stream_encoder(&strm, filters, LZMA_CHECK_CRC64) != LZMA_OK) {
+	lzma_ret init_ret = (format == XZ_FORMAT_RAW)
+		? lzma_raw_encoder(&strm, filters)
+		: lzma_stream_encoder(&strm, filters, LZMA_CHECK_CRC64);
+	if (init_ret != LZMA_OK) {
 		return NULL;
 	}
 
