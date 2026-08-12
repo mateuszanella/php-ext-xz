@@ -19,7 +19,7 @@ $result1 .= xz_decode_finish($ctx_no_concat);
 var_dump($result1 === 'Part One: ');
 
 // With CONCATENATED flag it processes both streams
-$ctx_concat = xz_decode_init(XZ_CONCATENATED);
+$ctx_concat = xz_decode_init(XZ_FORMAT_XZ, ['flags' => XZ_CONCATENATED]);
 $result2 = xz_decode_add($ctx_concat, $concatenated);
 $result2 .= xz_decode_finish($ctx_concat);
 var_dump($result2 === 'Part One: Part Two.');

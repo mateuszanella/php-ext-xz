@@ -75,6 +75,14 @@ PHP_MINIT_FUNCTION(xz)
 	REGISTER_LONG_CONSTANT("XZ_CHECK_CRC64", LZMA_CHECK_CRC64, CONST_CS | CONST_PERSISTENT);
 	REGISTER_LONG_CONSTANT("XZ_CHECK_SHA256", LZMA_CHECK_SHA256, CONST_CS | CONST_PERSISTENT);
 
+	// Compression container formats. See xz_encode_init / xz_decode_init
+	REGISTER_LONG_CONSTANT("XZ_FORMAT_XZ", XZ_FORMAT_XZ, CONST_CS | CONST_PERSISTENT);
+	REGISTER_LONG_CONSTANT("XZ_FORMAT_RAW", XZ_FORMAT_RAW, CONST_CS | CONST_PERSISTENT);
+
+	// Raw filter ids. See xz_encode_init / xz_decode_init
+	REGISTER_LONG_CONSTANT("XZ_FILTER_LZMA1", LZMA_FILTER_LZMA1, CONST_CS | CONST_PERSISTENT);
+	REGISTER_LONG_CONSTANT("XZ_FILTER_LZMA2", LZMA_FILTER_LZMA2, CONST_CS | CONST_PERSISTENT);
+
 	// Decode context flags. See xz_decode_init
 	REGISTER_LONG_CONSTANT("XZ_CONCATENATED", LZMA_CONCATENATED, CONST_CS | CONST_PERSISTENT);
 	REGISTER_LONG_CONSTANT("XZ_FAIL_FAST", LZMA_FAIL_FAST, CONST_CS | CONST_PERSISTENT);
@@ -141,25 +149,35 @@ PHP_FUNCTION(xzopen)
 }
 /* }}} */
 
-/* {{{ proto string xzencode(string str)
+/* {{{ proto string xzencode(string data, int level, int format)
    Returns the encoded string. */
 PHP_FUNCTION(xzencode)
 {
 	char *in;
 	size_t in_len;
-	zend_long compression_level = (zend_long)zend_ini_long_literal("xz.compression_level");
+	zend_long level = -1;
+	zend_long format = XZ_FORMAT_XZ;
 
-	ZEND_PARSE_PARAMETERS_START(1, 2)
+	ZEND_PARSE_PARAMETERS_START(1, 3)
 		Z_PARAM_STRING(in, in_len)
 		Z_PARAM_OPTIONAL
-		Z_PARAM_LONG(compression_level)
+		Z_PARAM_LONG(level)
+		Z_PARAM_LONG(format)
 	ZEND_PARSE_PARAMETERS_END();
 
-	if (compression_level < 0 || compression_level > 9) {
-		XZ_VALUE_ERROR(2, "must be between 0 and 9", "compression level must be between 0 and 9");
+	if (level == -1) {
+		level = (zend_long)zend_ini_long_literal("xz.compression_level");
 	}
 
-	zend_string *out = php_xz_encode_string((const uint8_t *)in, in_len, (uint32_t)compression_level);
+	if (level < 0 || level > 9) {
+		XZ_VALUE_ERROR(2, "must be between -1 and 9", "compression level must be between -1 and 9");
+	}
+
+	if (format != XZ_FORMAT_XZ && format != XZ_FORMAT_RAW) {
+		XZ_VALUE_ERROR(3, "must be XZ_FORMAT_XZ or XZ_FORMAT_RAW", "format must be XZ_FORMAT_XZ or XZ_FORMAT_RAW");
+	}
+
+	zend_string *out = php_xz_encode_string((const uint8_t *)in, in_len, (uint32_t)level, (uint32_t)format);
 
 	if (!out) {
 		RETURN_FALSE;
@@ -169,24 +187,33 @@ PHP_FUNCTION(xzencode)
 }
 /* }}} */
 
-/* {{{ proto string xzdecode(string str)
+/* {{{ proto string xzdecode(string data, int memory_limit)
    Returns the decoded string. */
 PHP_FUNCTION(xzdecode)
 {
 	char *in;
 	size_t in_len;
+	zend_long memory_limit = -1;
 
-	ZEND_PARSE_PARAMETERS_START(1, 1)
+	ZEND_PARSE_PARAMETERS_START(1, 2)
 		Z_PARAM_STRING(in, in_len)
+		Z_PARAM_OPTIONAL
+		Z_PARAM_LONG(memory_limit)
 	ZEND_PARSE_PARAMETERS_END();
 
 	if (!in_len) {
 		RETURN_FALSE;
 	}
 
-	uint64_t memory_limit = (uint64_t)zend_ini_long_literal("xz.max_memory");
+	if (memory_limit < -1) {
+		XZ_VALUE_ERROR(2, "must be greater than or equal to -1", "memory limit must be greater than or equal to -1");
+	}
 
-	zend_string *out = php_xz_decode_string((const uint8_t *)in, in_len, memory_limit);
+	if (memory_limit == -1) {
+		memory_limit = (zend_long)zend_ini_long_literal("xz.max_memory");
+	}
+
+	zend_string *out = php_xz_decode_string((const uint8_t *)in, in_len, (uint64_t)memory_limit);
 
 	if (!out) {
 		RETURN_FALSE;

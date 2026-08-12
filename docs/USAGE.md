@@ -8,22 +8,23 @@ file operations.
 
 ### `xzencode`
 
-Encodes a string with xz (LZMA2) compression.
+Encodes a string with xz (LZMA2) compression, or a bare raw LZMA2 stream.
 
 ```php
-xzencode(string $str, ?int $compression_level = null): string|false
+xzencode(string $data, int $level = -1, int $format = XZ_FORMAT_XZ): string|false
 ```
 
 **Parameters**
 
-| Parameter            | Description                                                                                                                                                                                      |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `$str`               | The uncompressed input data.                                                                                                                                                                     |
-| `$compression_level` | Compression level (0–9). `null` or omitted uses the [`xz.compression_level`](#runtime-configuration) INI setting (default 5). Higher levels produce smaller output but use more time and memory. |
+| Parameter | Description                                                                                                                                                                                  |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$data`   | The uncompressed input data.                                                                                                                                                                 |
+| `$level`  | Compression level (`-1` or 0–9). `-1` or omitted uses the [`xz.compression_level`](#runtime-configuration) INI setting (default 5). Higher levels produce smaller output but use more time and memory. |
+| `$format` | The container format. [`XZ_FORMAT_XZ`](#predefined-constants) (default) produces a self-contained xz stream; [`XZ_FORMAT_RAW`](#predefined-constants) produces a bare LZMA2 stream with no container. For full codec control (LZMA1, dictionary size, `lc`/`lp`/`pb`), use [`xz_encode_init()`](#xz_encode_init). |
 
 **Return Values**
 
-Returns the xz-compressed string on success, or `false` on failure.
+Returns the compressed string on success, or `false` on failure.
 
 **Examples**
 
@@ -32,6 +33,9 @@ $compressed = xzencode('Hello, World!');
 
 // With explicit compression level
 $compressed = xzencode($data, 9);
+
+// As a raw LZMA2 stream
+$raw = xzencode($data, -1, XZ_FORMAT_RAW);
 ```
 
 ---
@@ -41,14 +45,15 @@ $compressed = xzencode($data, 9);
 Decodes an xz (LZMA2) compressed string.
 
 ```php
-xzdecode(string $str): string|false
+xzdecode(string $data, int $memory_limit = -1): string|false
 ```
 
 **Parameters**
 
-| Parameter | Description                                      |
-| --------- | ------------------------------------------------ |
-| `$str`    | The xz-compressed input data. Must not be empty. |
+| Parameter      | Description                                                                                                                                                                       |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$data`        | The xz-compressed input data. Must not be empty.                                                                                                                                   |
+| `$memory_limit` | Maximum memory (in bytes) the decoder may allocate. `0` means unlimited; `-1` or omitted uses the [`xz.max_memory`](#runtime-configuration) INI setting.                          |
 
 **Return Values**
 
@@ -58,6 +63,9 @@ Returns the decompressed string on success, or `false` on failure (e.g. invalid 
 
 ```php
 $original = xzdecode($compressed);
+
+// With an explicit memory limit
+$original = xzdecode($compressed, 64 * 1024 * 1024);
 ```
 
 ---
@@ -75,21 +83,21 @@ Created by `xz_encode_init()`, consumed by `xz_encode_finish()` and `xz_encode_a
 
 ### `xz_encode_init`
 
-Initializes an incremental xz compression context.
+Initializes an incremental compression context.
 
 ```php
 xz_encode_init(
-    int $check = XZ_CHECK_CRC64,
+    int $format = XZ_FORMAT_XZ,
     array $options = []
 ): XZEncodeContext|false
 ```
 
 **Parameters**
 
-| Parameter  | Description                                                                                                                                                                                                                                     |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `$check`   | Integrity check type embedded in the xz stream. One of [`XZ_CHECK_NONE`](#predefined-constants), [`XZ_CHECK_CRC32`](#predefined-constants), [`XZ_CHECK_CRC64`](#predefined-constants) (default), or [`XZ_CHECK_SHA256`](#predefined-constants). |
-| `$options` | Associative array of encoder options. Supported key: `"level"` (int, 0–9). Defaults to the [`xz.compression_level`](#runtime-configuration) INI setting.                                                                                        |
+| Parameter  | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$format`  | The container format. [`XZ_FORMAT_XZ`](#predefined-constants) (default) produces a self-contained xz stream; [`XZ_FORMAT_RAW`](#predefined-constants) produces a bare LZMA1/LZMA2 stream with no container, header, or integrity check.                                                                                                                                                                                                                                       |
+| `$options` | Associative array of encoder options. Supported keys: `"check"` (xz only, one of [`XZ_CHECK_*`](#check-types)), `"level"` (0–9), `"filter"` (raw only, [`XZ_FILTER_LZMA1`](#filter-ids) or [`XZ_FILTER_LZMA2`](#filter-ids), default LZMA2), `"dict_size"` (dictionary size in bytes), `"lc"` (0–4), `"lp"` (0–4), `"pb"` (0–4). `"level"` defaults to the [`xz.compression_level`](#runtime-configuration) INI setting; the other parameters default to the level preset. |
 
 **Return Values**
 
@@ -99,9 +107,13 @@ PHP 8.0+ throws `\ValueError` for invalid arguments.
 **Examples**
 
 ```php
-$ctx = xz_encode_init();                                 // CRC64, level from INI
-$ctx = xz_encode_init(XZ_CHECK_SHA256);                  // SHA-256, level from INI
-$ctx = xz_encode_init(XZ_CHECK_CRC64, ['level' => 9]);   // CRC64, maximum compression
+$ctx = xz_encode_init();                                          // xz, CRC64, level from INI
+$ctx = xz_encode_init(XZ_FORMAT_XZ, ['check' => XZ_CHECK_SHA256]); // xz with SHA-256 check
+$ctx = xz_encode_init(XZ_FORMAT_XZ, ['level' => 9]);              // xz, maximum compression
+$ctx = xz_encode_init(XZ_FORMAT_RAW, [                            // raw LZMA2 stream
+    'filter' => XZ_FILTER_LZMA2,
+    'dict_size' => 1 << 20,
+]);
 ```
 
 ---
@@ -149,6 +161,40 @@ warning if the context was already finished.
 
 ---
 
+### `xz_encode_get_properties`
+
+Returns the LZMA properties for a raw compression context.
+
+```php
+xz_encode_get_properties(XZEncodeContext $context): string|false
+```
+
+**Parameters**
+
+| Parameter  | Description                                          |
+| ---------- | ---------------------------------------------------- |
+| `$context` | A compression context created with `XZ_FORMAT_RAW`.  |
+
+**Return Values**
+
+Returns the property bytes describing the codec configuration as a binary
+string. For LZMA2 this is a single byte encoding the dictionary size; for LZMA1
+it is five bytes (`(pb*5+lp)*9+lc` followed by the dictionary size as a
+little-endian 32-bit value). These bytes can be stored alongside a raw stream
+so it can be decoded later.
+
+Returns `false` with a warning if the context was not created with
+`XZ_FORMAT_RAW`.
+
+**Examples**
+
+```php
+$ctx = xz_encode_init(XZ_FORMAT_RAW, ['filter' => XZ_FILTER_LZMA2, 'dict_size' => 1 << 20]);
+$props = xz_encode_get_properties($ctx); // "\x10"
+```
+
+---
+
 ### Encode lifecycle
 
 ```
@@ -174,21 +220,21 @@ Created by `xz_decode_init()`. Single-stream decoders auto-finish —
 
 ### `xz_decode_init`
 
-Initializes an incremental xz decompression context.
+Initializes an incremental decompression context.
 
 ```php
 xz_decode_init(
-    int $flags = 0,
-    int $memory_limit = 0
+    int $format = XZ_FORMAT_XZ,
+    array $options = []
 ): XZDecodeContext|false
 ```
 
 **Parameters**
 
-| Parameter       | Description                                                                                                                                                                                                                                          |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `$flags`        | Bitmask of [decoder flags](#predefined-constants). `0` for single-stream decoding. Use `XZ_CONCATENATED` for multiple concatenated streams, `XZ_FAIL_FAST` to stop immediately on corrupt data, or `XZ_IGNORE_CHECK` to skip integrity verification. |
-| `$memory_limit` | Maximum memory (in bytes) the decoder may allocate. `0` means unlimited. Defaults to the [`xz.max_memory`](#runtime-configuration) INI setting.                                                                                                      |
+| Parameter  | Description                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$format`  | The container format. [`XZ_FORMAT_XZ`](#predefined-constants) (default) decodes self-contained xz streams; [`XZ_FORMAT_RAW`](#predefined-constants) decodes a bare LZMA1/LZMA2 stream with no container.                                                                                                                                                                                                                                                 |
+| `$options` | Associative array of decoder options. Supported keys: `"flags"` (xz only, bitmask of [decoder flags](#decoder-flags), default `0`), `"memory_limit"` (xz only, maximum memory in bytes, `0` for unlimited, defaults to the [`xz.max_memory`](#runtime-configuration) INI setting), `"filter"` (raw only, [`XZ_FILTER_LZMA1`](#filter-ids) or [`XZ_FILTER_LZMA2`](#filter-ids), default LZMA2), `"dict_size"` (raw only), `"lc"`/`"lp"`/`"pb"` (raw only, LZMA1). |
 
 **Return Values**
 
@@ -197,10 +243,10 @@ Returns an `XZDecodeContext` object on success, or `false` on failure.
 **Examples**
 
 ```php
-$ctx = xz_decode_init();                                  // single stream, unlimited memory
-$ctx = xz_decode_init(XZ_CONCATENATED);                   // concatenated streams
-$ctx = xz_decode_init(XZ_FAIL_FAST, 64 * 1024 * 1024);    // fail fast, 64 MB limit
-$ctx = xz_decode_init(XZ_IGNORE_CHECK | XZ_CONCATENATED); // combined flags
+$ctx = xz_decode_init();                                                 // single xz stream, unlimited memory
+$ctx = xz_decode_init(XZ_FORMAT_XZ, ['flags' => XZ_CONCATENATED]);       // concatenated streams
+$ctx = xz_decode_init(XZ_FORMAT_XZ, ['flags' => XZ_FAIL_FAST, 'memory_limit' => 64 * 1024 * 1024]);
+$ctx = xz_decode_init(XZ_FORMAT_RAW, ['filter' => XZ_FILTER_LZMA2, 'dict_size' => 1 << 20]); // raw stream
 ```
 
 ---
@@ -392,9 +438,28 @@ xzclose($fp);
 
 ## Predefined Constants
 
+### Formats
+
+Pass to `xz_encode_init()` / `xz_decode_init()` as the `$format` argument.
+
+| Constant         | Description                                                        |
+| ---------------- | ------------------------------------------------------------------ |
+| `XZ_FORMAT_XZ`   | Self-contained xz stream with header, footer and integrity check.  |
+| `XZ_FORMAT_RAW`  | Bare LZMA1/LZMA2 stream with no container.                          |
+
+### Filter ids
+
+Pass to `xz_encode_init()` / `xz_decode_init()` as the `"filter"` option
+(raw format only).
+
+| Constant           | Description                          |
+| ------------------ | ------------------------------------ |
+| `XZ_FILTER_LZMA1`  | LZMA1 codec (classic `.lzma`).       |
+| `XZ_FILTER_LZMA2`  | LZMA2 codec (default).               |
+
 ### Check types
 
-Pass to `xz_encode_init()`.
+Pass to `xz_encode_init()` via the `"check"` option (xz format only).
 
 | Constant          | Description                  |
 | ----------------- | ---------------------------- |
@@ -405,7 +470,7 @@ Pass to `xz_encode_init()`.
 
 ### Decoder flags
 
-Pass to `xz_decode_init()` as a bitmask.
+Pass to `xz_decode_init()` via the `"flags"` option as a bitmask.
 
 | Constant          | Description                                |
 | ----------------- | ------------------------------------------ |
@@ -430,7 +495,7 @@ Returned by `xz_decode_get_status()`.
 | INI setting            | Default         | Description                                                                                                        |
 | ---------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `xz.compression_level` | `5`             | Default compression level (0–9) for `xzencode()` and `xz_encode_init()` when the level is not explicitly provided. |
-| `xz.max_memory`        | `0` (unlimited) | Maximum memory (in bytes) the decoder may allocate. Used by `xz_decode_init()` when `$memory_limit` is omitted.    |
+| `xz.max_memory`        | `0` (unlimited) | Maximum memory (in bytes) the decoder may allocate. Used by `xzdecode()` and `xz_decode_init()` when no explicit limit is given. |
 
 ```ini
 ; php.ini

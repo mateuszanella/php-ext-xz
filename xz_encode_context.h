@@ -26,6 +26,10 @@
 typedef struct _php_xz_encode_context_obj {
 	lzma_stream strm;
 	lzma_ret status;
+	lzma_filter filter;
+	lzma_options_lzma opt;
+	uint32_t format;
+	lzma_check check;
 	zend_object std;
 } php_xz_encode_context_obj;
 
@@ -42,5 +46,6 @@ zend_object *php_xz_encode_context_create_obj(zend_class_entry *class_type);
 PHP_FUNCTION(xz_encode_init);
 PHP_FUNCTION(xz_encode_add);
 PHP_FUNCTION(xz_encode_finish);
+PHP_FUNCTION(xz_encode_get_properties);
 
 #endif /* PHP_XZ_ENCODE_CONTEXT_H */

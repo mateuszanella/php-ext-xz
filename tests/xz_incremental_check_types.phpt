@@ -11,7 +11,7 @@ if (!extension_loaded("xz")) {
 $input = 'Testing all xz integrity check types.';
 
 foreach ([XZ_CHECK_NONE, XZ_CHECK_CRC32, XZ_CHECK_CRC64, XZ_CHECK_SHA256] as $check) {
-	$ctx = xz_encode_init($check);
+	$ctx = xz_encode_init(XZ_FORMAT_XZ, ['check' => $check]);
 	$out = xz_encode_add($ctx, $input);
 	$out .= xz_encode_finish($ctx);
 

@@ -53,6 +53,12 @@ $compressed = xzencode($originalString);
 
 // Decompress a string
 $decompressed = xzdecode($compressed);
+
+// With explicit level and format (raw LZMA2 stream, no container)
+$raw = xzencode($originalString, 6, XZ_FORMAT_RAW);
+
+// With an explicit decoder memory limit
+$decompressed = xzdecode($compressed, 64 * 1024 * 1024);
 ```
 
 ### File-based operations
@@ -85,6 +91,21 @@ $out .= xz_encode_finish($ctx);
 
 $ctx = xz_decode_init();
 $original = xz_decode_add($ctx, $out);
+```
+
+### Raw LZMA streams
+
+Besides the xz container, the incremental API can produce and consume bare
+LZMA1/LZMA2 streams (`XZ_FORMAT_RAW`). This is useful when the stream needs a
+custom container, for example embedding an archive. The `"filter"` option
+selects the codec, and `xz_encode_get_properties()` returns the codec property
+bytes:
+
+```php
+$ctx = xz_encode_init(XZ_FORMAT_RAW, ['filter' => XZ_FILTER_LZMA2, 'dict_size' => 1 << 20]);
+$packed  = xz_encode_add($ctx, $data);
+$packed .= xz_encode_finish($ctx);
+$props   = xz_encode_get_properties($ctx); // 1 byte for LZMA2, 5 for LZMA1
 ```
 
 See [docs/USAGE.md](docs/USAGE.md) for the full API reference, constant tables,

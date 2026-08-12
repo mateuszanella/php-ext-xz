@@ -18,14 +18,16 @@ $level = 2;
 $encoding_mode = FORCE_DEFLATE;
 
 echo "\n-- Testing with larger than 9 compression level --\n";
-$bad_level = 99;
 
-var_dump(xzencode($data, $bad_level));
+var_dump(xzencode($data, 99));
 
-echo "\n-- Testing with lower than 0 compression level --\n";
-$bad_level = -99;
+echo "\n-- Testing with lower than -1 compression level --\n";
 
-var_dump(xzencode($data, $bad_level));
+var_dump(xzencode($data, -99));
+
+echo "\n-- Testing with invalid format --\n";
+
+var_dump(xzencode($data, -1, 999));
 
 ?>
 --EXPECTF--
@@ -33,10 +35,15 @@ var_dump(xzencode($data, $bad_level));
 
 -- Testing with larger than 9 compression level --
 
-Warning: xzencode(): compression level must be between 0 and 9 in %s on line %d
+Warning: xzencode(): compression level must be between -1 and 9 in %s on line %d
 bool(false)
 
--- Testing with lower than 0 compression level --
+-- Testing with lower than -1 compression level --
 
-Warning: xzencode(): compression level must be between 0 and 9 in %s on line %d
+Warning: xzencode(): compression level must be between -1 and 9 in %s on line %d
+bool(false)
+
+-- Testing with invalid format --
+
+Warning: xzencode(): format must be XZ_FORMAT_XZ or XZ_FORMAT_RAW in %s on line %d
 bool(false)

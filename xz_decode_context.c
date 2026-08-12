@@ -21,6 +21,7 @@
 
 #include "php.h"
 #include "xz_compat.h"
+#include "xz_options.h"
 
 zend_class_entry *xz_decode_context_ce;
 
@@ -104,28 +105,104 @@ static zend_string *php_xz_decode_context_process(php_xz_decode_context_obj *obj
 	return out;
 }
 
-/* {{{ proto XZDecodeContext xz_decode_init(int flags, int memory_limit)
-   Creates a new incremental xz decompression context. */
+static int xz_decode_validate_lzma_params(zend_long lc, zend_long lp, zend_long pb, zend_long dict_size)
+{
+	if (lc < -1 || lc > 4 || lp < -1 || lp > 4 || pb < -1 || pb > 4) {
+		return 0;
+	}
+	if (lc >= 0 && lp >= 0 && lc + lp > 4) {
+		return 0;
+	}
+	if (dict_size < 0) {
+		return 0;
+	}
+	return 1;
+}
+
+/* {{{ proto XZDecodeContext xz_decode_init(int format, array options)
+   Creates a new incremental xz or raw LZMA decompression context. */
 PHP_FUNCTION(xz_decode_init)
 {
-	zend_long memory_limit = (zend_long)zend_ini_long_literal("xz.max_memory");
-	zend_long flags = 0;
+	zend_long format = XZ_FORMAT_XZ;
+	HashTable *options = NULL;
 
 	ZEND_PARSE_PARAMETERS_START(0, 2)
 		Z_PARAM_OPTIONAL
-		Z_PARAM_LONG(flags)
-		Z_PARAM_LONG(memory_limit)
+		Z_PARAM_LONG(format)
+		Z_PARAM_ARRAY_HT(options)
 	ZEND_PARSE_PARAMETERS_END();
+
+	if (format != XZ_FORMAT_XZ && format != XZ_FORMAT_RAW) {
+		XZ_VALUE_ERROR(1, "must be XZ_FORMAT_XZ or XZ_FORMAT_RAW", "format must be XZ_FORMAT_XZ or XZ_FORMAT_RAW");
+	}
+
+	zend_long flags = 0;
+	zend_long memory_limit = (zend_long)zend_ini_long_literal("xz.max_memory");
+	zend_long filter_id = LZMA_FILTER_LZMA2;
+	zend_long dict_size = 0;
+	zend_long lc = -1;
+	zend_long lp = -1;
+	zend_long pb = -1;
+
+	if (options) {
+		php_xz_opt_get_long(options, "flags", &flags);
+		php_xz_opt_get_long(options, "memory_limit", &memory_limit);
+		php_xz_opt_get_long(options, "filter", &filter_id);
+		php_xz_opt_get_long(options, "dict_size", &dict_size);
+		php_xz_opt_get_long(options, "lc", &lc);
+		php_xz_opt_get_long(options, "lp", &lp);
+		php_xz_opt_get_long(options, "pb", &pb);
+	}
+
+	if (filter_id != LZMA_FILTER_LZMA1 && filter_id != LZMA_FILTER_LZMA2) {
+		XZ_VALUE_ERROR(2, "options['filter'] must be XZ_FILTER_LZMA1 or XZ_FILTER_LZMA2", "filter must be XZ_FILTER_LZMA1 or XZ_FILTER_LZMA2");
+	}
+
+	if (!xz_decode_validate_lzma_params(lc, lp, pb, dict_size)) {
+		XZ_VALUE_ERROR(2, "options['lc'], options['lp'], options['pb'] must be between 0 and 4 with lc + lp <= 4, and options['dict_size'] must be non-negative", "invalid LZMA parameters");
+	}
 
 	object_init_ex(return_value, xz_decode_context_ce);
 	php_xz_decode_context_obj *obj = php_xz_decode_context_from_obj(Z_OBJ_P(return_value));
 
-	lzma_ret ret = lzma_auto_decoder(&obj->strm,
-		memory_limit ? (uint64_t)memory_limit : UINT64_MAX, (uint32_t)flags);
+	lzma_ret ret;
+	if (format == XZ_FORMAT_RAW) {
+		lzma_options_lzma opt;
+		if (lzma_lzma_preset(&opt, 6)) {
+			zval_ptr_dtor(return_value);
+			RETURN_FALSE;
+		}
+
+		if (dict_size) {
+			opt.dict_size = (uint32_t)dict_size;
+		}
+		if (lc >= 0) {
+			opt.lc = (uint32_t)lc;
+		}
+		if (lp >= 0) {
+			opt.lp = (uint32_t)lp;
+		}
+		if (pb >= 0) {
+			opt.pb = (uint32_t)pb;
+		}
+
+		lzma_filter filters[] = {
+			{ .id = (lzma_vli)filter_id, .options = &opt },
+			{ .id = LZMA_VLI_UNKNOWN,  .options = NULL },
+		};
+
+		ret = lzma_raw_decoder(&obj->strm, filters);
+	} else {
+		ret = lzma_auto_decoder(&obj->strm,
+			memory_limit ? (uint64_t)memory_limit : UINT64_MAX, (uint32_t)flags);
+	}
+
 	if (ret != LZMA_OK) {
 		zval_ptr_dtor(return_value);
 		RETURN_FALSE;
 	}
+
+	obj->format = (uint32_t)format;
 	obj->status = LZMA_OK;
 }
 /* }}} */

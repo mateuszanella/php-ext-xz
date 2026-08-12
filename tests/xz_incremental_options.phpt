@@ -10,7 +10,7 @@ if (!extension_loaded("xz")) {
 <?php
 $input = "Hello World options test";
 
-$ctx = xz_encode_init(XZ_CHECK_CRC32, ['level' => 1]);
+$ctx = xz_encode_init(XZ_FORMAT_XZ, ['check' => XZ_CHECK_CRC32, 'level' => 1]);
 $out  = xz_encode_add($ctx, $input);
 $out .= xz_encode_finish($ctx);
 
@@ -20,7 +20,7 @@ $decoded .= xz_decode_finish($dctx);
 
 var_dump($decoded === $input);
 
-$ctx2 = xz_encode_init(XZ_CHECK_SHA256);
+$ctx2 = xz_encode_init(XZ_FORMAT_XZ, ['check' => XZ_CHECK_SHA256]);
 $out2  = xz_encode_add($ctx2, $input);
 $out2 .= xz_encode_finish($ctx2);
 $dctx2 = xz_decode_init();
