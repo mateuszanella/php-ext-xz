@@ -50,7 +50,7 @@ void php_xz_decode_context_register_handlers(void)
 	memcpy(&php_xz_decode_context_object_handlers, &std_object_handlers, sizeof(zend_object_handlers));
 	php_xz_decode_context_object_handlers.free_obj = php_xz_decode_context_free_obj;
 	php_xz_decode_context_object_handlers.clone_obj = NULL;
-	php_xz_decode_context_object_handlers.offset = XtOffsetOf(php_xz_decode_context_obj, std);
+	php_xz_decode_context_object_handlers.offset = offsetof(php_xz_decode_context_obj, std);
 }
 
 static zend_string *php_xz_decode_context_process(php_xz_decode_context_obj *obj, const char *data, size_t data_len, lzma_action action)
