@@ -32,7 +32,7 @@ typedef struct _php_xz_decode_context_obj {
 
 static inline php_xz_decode_context_obj *php_xz_decode_context_from_obj(zend_object *obj)
 {
-	return (php_xz_decode_context_obj *)((char *)obj - XtOffsetOf(php_xz_decode_context_obj, std));
+	return (php_xz_decode_context_obj *)((char *)obj - offsetof(php_xz_decode_context_obj, std));
 }
 
 extern zend_class_entry *xz_decode_context_ce;
